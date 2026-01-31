@@ -1,28 +1,38 @@
-// script.js - FRONTEND FINAL E CORRIGIDO
+// script.js - FRONTEND FINAL
 
 const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 
 let html5QrCode;
 
-// --- 1. CONTROLE DE NAVEGAÇÃO (ABAS) ---
+// --- 1. CONTROLE DE NAVEGAÇÃO ---
 function switchTab(tabName) {
-    // Esconde todas as abas (procura por elementos com classe 'tab-content')
-    const tabs = document.querySelectorAll('.tab-content');
-    tabs.forEach(tab => tab.classList.add('hidden'));
+    // UI: Ajusta as seções
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+    const target = document.getElementById(`tab-${tabName}`);
+    if (target) target.classList.remove('hidden');
 
-    // Mostra a aba selecionada
-    const targetTab = document.getElementById(`tab-${tabName}`);
-    if (targetTab) {
-        targetTab.classList.remove('hidden');
+    // UI: Ajusta a cor dos botões do menu
+    const btnReg = document.getElementById('nav-registrar');
+    const btnCon = document.getElementById('nav-consultar');
+    
+    if(tabName === 'registrar') {
+        btnReg.classList.add('active-tab', 'text-blue-400');
+        btnReg.classList.remove('text-slate-500');
+        btnCon.classList.remove('active-tab', 'text-blue-400');
+        btnCon.classList.add('text-slate-500');
+    } else {
+        btnCon.classList.add('active-tab', 'text-blue-400');
+        btnCon.classList.remove('text-slate-500');
+        btnReg.classList.remove('active-tab', 'text-blue-400');
+        btnReg.classList.add('text-slate-500');
     }
 
-    // Se sair da aba de registrar, para a câmera para não travar
+    // CÂMERA: Desliga se sair da aba registrar
     if (tabName !== 'registrar' && html5QrCode && html5QrCode.isScanning) {
         html5QrCode.stop().then(() => {
-            console.log("Câmera parada ao mudar de aba.");
             document.getElementById('scan-message').classList.add('hidden');
             document.getElementById('start-scan-btn').disabled = false;
-        }).catch(err => console.error("Erro ao parar câmera:", err));
+        }).catch(err => console.error(err));
     }
 }
 
@@ -33,51 +43,51 @@ async function startScanner() {
     
     startBtn.disabled = true;
     scanMsg.classList.remove('hidden');
-    scanMsg.textContent = "Iniciando câmera...";
+    scanMsg.textContent = "Solicitando permissão da câmera...";
 
     try {
         if (!html5QrCode) {
             html5QrCode = new Html5Qrcode("reader");
         }
         
-        const config = { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.777 };
+        // Configuração otimizada para celular
+        const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
 
-        // Tenta iniciar a câmera
         await html5QrCode.start(
             { facingMode: "environment" }, 
             config, 
             onScanSuccess
         );
 
-        scanMsg.textContent = "Aponte para o código de barras.";
+        scanMsg.textContent = "Posicione o código no quadrado";
         
     } catch (err) {
         console.error("Erro câmera:", err);
-        alert("Não foi possível acessar a câmera. Verifique as permissões.");
-        scanMsg.classList.add('hidden');
+        alert("Erro ao abrir câmera: " + err);
+        scanMsg.textContent = "Erro de acesso.";
         startBtn.disabled = false;
     }
 }
 
 async function onScanSuccess(decodedText) {
     try {
-        await html5QrCode.stop(); // Para o scanner
+        await html5QrCode.stop();
         document.getElementById('scan-message').textContent = "Buscando produto...";
 
-        // Consulta API
+        // Busca dados
         const response = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?ean=${decodedText}`, { redirect: 'follow' });
         const data = await response.json();
 
-        // Preenche formulário
+        // Preenche e exibe form
         document.getElementById('ean-field').value = decodedText;
-        document.getElementById('product-name').value = data.nome || "Produto não identificado";
+        document.getElementById('product-name').value = data.nome || "";
         
-        // Exibe o formulário
-        document.getElementById('scanner-section').classList.add('hidden');
+        // Esconde scanner, mostra form
+        document.getElementById('scanner-container').classList.add('hidden');
         document.getElementById('price-form-section').classList.remove('hidden');
         
     } catch (error) {
-        alert("Erro ao buscar produto: " + error);
+        alert("Erro ao buscar: " + error);
         document.getElementById('start-scan-btn').disabled = false;
     }
 }
@@ -90,22 +100,22 @@ async function loadMarkets() {
         const data = await res.json();
         
         if (data.sucesso && data.mercados) {
-            select.innerHTML = '<option value="">Selecione um local</option>' + 
+            select.innerHTML = '<option value="">Selecione o Mercado</option>' + 
                 data.mercados.map(m => `<option value="${m}">${m}</option>`).join('');
         }
     } catch (e) {
-        console.error("Erro ao carregar mercados", e);
+        console.error("Erro mercados:", e);
+        select.innerHTML = '<option value="">Erro ao carregar</option>';
     }
 }
 
-// --- 4. ENVIAR DADOS (REGISTRAR) ---
+// --- 4. REGISTRAR PREÇO ---
 async function enviarParaPlanilha(e) {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
     const textoOriginal = btn.textContent;
-    
     btn.disabled = true;
-    btn.textContent = "Salvando...";
+    btn.textContent = "Enviando...";
 
     const payload = {
         ean: document.getElementById('ean-field').value,
@@ -122,77 +132,88 @@ async function enviarParaPlanilha(e) {
             body: JSON.stringify(payload)
         });
         alert("Preço salvo com sucesso!");
-        location.reload(); 
+        location.reload();
     } catch (err) {
-        alert("Erro ao salvar: " + err);
+        alert("Erro: " + err);
         btn.disabled = false;
         btn.textContent = textoOriginal;
     }
 }
 
-// --- 5. PESQUISAR PREÇOS (CONSULTAR) ---
+// --- 5. PESQUISAR ---
 async function pesquisarOfertas() {
     const termo = document.getElementById('search-input').value;
-    const resultadoDiv = document.getElementById('search-results');
+    const div = document.getElementById('search-results');
     
-    if (!termo) return alert("Digite o nome de um produto.");
+    if (!termo) return alert("Digite algo para buscar.");
 
-    resultadoDiv.innerHTML = '<p class="text-center text-gray-400 mt-4">Pesquisando...</p>';
+    div.innerHTML = '<div class="text-center py-4"><div class="loader"></div><p class="text-slate-400 mt-2">Buscando...</p></div>';
 
     try {
         const res = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?acao=buscarPrecos&busca=${termo}`, { redirect: 'follow' });
         const data = await res.json();
 
         if (data.sucesso && data.ofertas.length > 0) {
-            resultadoDiv.innerHTML = data.ofertas.map(item => `
-                <div class="bg-gray-800 p-4 rounded-xl mb-3 border border-gray-700 shadow flex justify-between items-center">
+            let html = "";
+            
+            // Destaque do Produto (se tiver imagem)
+            if (data.detalhes && data.detalhes.thumbnail) {
+                html += `
+                    <div class="bg-slate-800 p-4 rounded-2xl flex gap-4 items-center mb-6 border border-blue-500/30">
+                        <img src="${data.detalhes.thumbnail}" class="w-16 h-16 object-contain bg-white rounded-lg p-1">
+                        <div>
+                            <h3 class="font-bold text-lg leading-tight">${data.detalhes.nome}</h3>
+                            <p class="text-xs text-slate-400">${data.detalhes.marca}</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Lista
+            html += data.ofertas.map(item => `
+                <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex justify-between items-center shadow-sm">
                     <div>
                         <div class="text-emerald-400 font-bold text-xl">R$ ${parseFloat(item.preco).toFixed(2)}</div>
-                        <div class="text-white font-medium">${item.produto}</div>
-                        <div class="text-sm text-gray-400">${item.mercado}</div>
+                        <div class="text-sm text-slate-300 font-medium">${item.mercado}</div>
+                        <div class="text-xs text-slate-500">${item.data}</div>
                     </div>
-                    <div class="text-xs text-gray-500 text-right">${item.data}</div>
+                    ${item.produto !== termo ? `<div class="text-xs text-slate-600 max-w-[80px] text-right truncate">${item.produto}</div>` : ''}
                 </div>
             `).join('');
+            
+            div.innerHTML = html;
         } else {
-            resultadoDiv.innerHTML = '<p class="text-center text-gray-500 mt-4">Nenhum preço encontrado.</p>';
+            div.innerHTML = '<p class="text-center text-slate-500 py-8">Nenhum preço encontrado.</p>';
         }
     } catch (e) {
-        resultadoDiv.innerHTML = '<p class="text-center text-red-400 mt-4">Erro na busca.</p>';
+        div.innerHTML = '<p class="text-center text-red-400">Erro na conexão.</p>';
     }
 }
 
-// --- 6. INICIALIZAÇÃO (CONECTAR TUDO) ---
+// --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
-    loadMarkets(); // Carrega mercados
+    loadMarkets();
 
-    // CONECTAR BOTÕES DO MENU INFERIOR
-    // Certifique-se que no HTML os botões têm id="nav-registrar" e "nav-consultar"
-    const btnRegistrar = document.getElementById('nav-registrar');
-    const btnConsultar = document.getElementById('nav-consultar');
-
-    if (btnRegistrar) btnRegistrar.addEventListener('click', () => switchTab('registrar'));
-    if (btnConsultar) btnConsultar.addEventListener('click', () => switchTab('consultar'));
-
-    // CONECTAR BOTÃO DA CÂMERA
-    const btnCamera = document.getElementById('start-scan-btn');
-    if (btnCamera) btnCamera.addEventListener('click', startScanner);
-
-    // CONECTAR FORMULÁRIO DE ENVIO
-    const formPrice = document.getElementById('price-form');
-    if (formPrice) formPrice.addEventListener('submit', enviarParaPlanilha);
-
-    // CONECTAR BOTÃO DE PESQUISA
-    const btnSearch = document.getElementById('search-btn');
-    if (btnSearch) btnSearch.addEventListener('click', pesquisarOfertas);
-
-    // BOTÃO CANCELAR
+    // Event Listeners (Agora os IDs batem com o HTML!)
+    document.getElementById('nav-registrar').addEventListener('click', () => switchTab('registrar'));
+    document.getElementById('nav-consultar').addEventListener('click', () => switchTab('consultar'));
+    
+    document.getElementById('start-scan-btn').addEventListener('click', startScanner);
+    document.getElementById('price-form').addEventListener('submit', enviarParaPlanilha);
+    document.getElementById('search-btn').addEventListener('click', pesquisarOfertas);
+    
+    // Botão cancelar form
     const btnCancel = document.getElementById('cancel-scan-btn');
-    if (btnCancel) btnCancel.addEventListener('click', () => location.reload());
+    if(btnCancel) {
+        btnCancel.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('price-form-section').classList.add('hidden');
+            document.getElementById('scanner-container').classList.remove('hidden');
+        });
+    }
 
-    // RECUPERAR NOME DE USUÁRIO
-    const savedUser = localStorage.getItem('radar_user');
-    const userField = document.getElementById('username');
-    if (savedUser && userField) userField.value = savedUser;
-    if (userField) userField.addEventListener('input', (e) => localStorage.setItem('radar_user', e.target.value));
+    // Recuperar Usuário
+    const user = localStorage.getItem('radar_user');
+    if (user) document.getElementById('username').value = user;
+    document.getElementById('username').addEventListener('input', (e) => localStorage.setItem('radar_user', e.target.value));
 });
