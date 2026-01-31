@@ -1,9 +1,9 @@
-// script.js - v5.0 (CARRINHO E COMPARADOR)
+// script.js - v5.1 (CORREÇÃO DE BUGS E UX MELHORADA)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 
 let html5QrCode;
 let scannerIsRunning = false;
-let carrinho = JSON.parse(localStorage.getItem('radar_carrinho')) || []; // Carrega carrinho salvo
+let carrinho = JSON.parse(localStorage.getItem('radar_carrinho')) || []; 
 
 // --- NOTIFICAÇÃO ---
 function mostrarNotificacao(mensagem, tipo = 'sucesso') {
@@ -28,24 +28,21 @@ async function trocarAba(aba) {
     const abas = ['registrar', 'consultar', 'carrinho'];
     abas.forEach(a => document.getElementById(a + '-container').classList.add('hidden'));
     
-    // Reseta cores menu
     document.getElementById('nav-registrar').className = "nav-btn text-slate-500";
     document.getElementById('nav-consultar').className = "nav-btn text-slate-500";
     document.getElementById('nav-carrinho').className = "nav-btn text-slate-500";
 
-    // Para Câmera
     if (scannerIsRunning && html5QrCode) {
         try { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; } catch(e){}
     }
 
-    // Ativa aba
     document.getElementById(aba + '-container').classList.remove('hidden');
     
     if (aba === 'registrar') document.getElementById('nav-registrar').className = "nav-btn text-blue-400";
     if (aba === 'consultar') document.getElementById('nav-consultar').className = "nav-btn text-yellow-400";
     if (aba === 'carrinho') {
         document.getElementById('nav-carrinho').className = "nav-btn text-purple-400";
-        renderizarCarrinho(); // Atualiza visual do carrinho
+        renderizarCarrinho();
     }
 }
 
@@ -62,7 +59,6 @@ function atualizarContadorCarrinho() {
 }
 
 function adicionarAoCarrinho(ean, produto) {
-    // Verifica se já existe
     if (!carrinho.find(item => item.ean === ean)) {
         carrinho.push({ ean, produto });
         atualizarContadorCarrinho();
@@ -84,7 +80,7 @@ function renderizarCarrinho() {
     const resultadoDiv = document.getElementById('resultado-comparacao');
     
     container.innerHTML = '';
-    resultadoDiv.classList.add('hidden'); // Esconde resultados antigos se mudar a lista
+    resultadoDiv.classList.add('hidden'); 
 
     if (carrinho.length === 0) {
         container.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-cart-shopping text-6xl mb-4"></i><p class="text-sm">Lista vazia.</p></div>`;
@@ -108,7 +104,7 @@ function renderizarCarrinho() {
     });
 }
 
-// --- LÓGICA DE COMPARAÇÃO (BACKEND) ---
+// --- LÓGICA DE COMPARAÇÃO ---
 async function calcularComparacao() {
     const btn = document.getElementById('btn-calcular-carrinho');
     const resultadoDiv = document.getElementById('resultado-comparacao');
@@ -119,58 +115,21 @@ async function calcularComparacao() {
     btn.innerHTML = '<div class="loader w-4 h-4 border-white"></div> Calculando...';
     btn.disabled = true;
 
-    // Prepara lista de EANs
-    const eans = carrinho.map(item => item.ean);
-
     try {
-        // Envia POST para processar a lista pesada
-        const response = await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors', // POST requer no-cors, mas não retorna JSON legível direto
-            body: JSON.stringify({ acao: "compararCarrinho", eans: eans })
-        });
-        
-        // TRUQUE: Como POST 'no-cors' não retorna dados, precisamos de uma estratégia diferente.
-        // O Apps Script v5.0 que te passei suporta lógica complexa, mas para receber JSON de volta
-        // no Front de forma fácil sem proxy, o ideal é usar GET se a URL não for gigante,
-        // OU (melhor), mudar a abordagem para processamento no cliente se forem poucos dados.
-        // VAMOS USAR UMA ADAPTAÇÃO: Vamos usar GET com parametros.
-        // Se a lista for muito grande, daria erro de URL, mas para uso pessoal é ok.
-        
-        const params = new URLSearchParams();
-        params.append('acao', 'compararCarrinho'); // Não existe no GET do v5, vamos simular via POST abaixo
-        
-        // Correção para funcionar 100% com Apps Script simples:
-        // Vamos forçar o script v5 a aceitar "compararCarrinho" no DO_POST e retornar via DO_GET se chamarmos.
-        // Como isso é complexo, vamos fazer o seguinte:
-        // O script DoPost processa, mas o front não lê.
-        // SOLUÇÃO: Vamos fazer chamadas individuais para pegar o melhor preço de cada item (Front-end Logic)
-        // Isso é mais lento mas garantido de funcionar sem Backend complexo.
-        
-        // 1. Calcular Otimizado (Misturado)
         let totalOtimizado = 0;
-        let precosPorMercado = {}; // { 'Mercado A': 0, 'Mercado B': 0 }
-        let contagemMercado = {};  // { 'Mercado A': 5 itens }
+        let precosPorMercado = {}; 
+        let contagemMercado = {};  
 
-        // Busca dados de cada item
         for (const item of carrinho) {
             const res = await fetch(`${APPS_SCRIPT_URL}?acao=consultarPrecos&ean=${item.ean}`, { redirect: 'follow' });
             const data = await res.json();
             
             if (data.resultados && data.resultados.length > 0) {
-                // Ordena pelo menor
                 data.resultados.sort((a, b) => a.preco - b.preco);
-                
-                // Soma ao otimizado
                 totalOtimizado += data.resultados[0].preco;
-
-                // Processa mercados individuais
-                // Para cada mercado que vende esse produto, soma ao total daquele mercado
-                // Se um mercado NÃO tem o produto, ele ficará com a contagem defasada
-                const mercadosDesteItem = [...new Set(data.resultados.map(r => r.mercado))];
                 
+                const mercadosDesteItem = [...new Set(data.resultados.map(r => r.mercado))];
                 mercadosDesteItem.forEach(mercado => {
-                    // Pega o melhor preço desse item NESTE mercado
                     const ofertaMercado = data.resultados.find(r => r.mercado === mercado);
                     if (ofertaMercado) {
                         precosPorMercado[mercado] = (precosPorMercado[mercado] || 0) + ofertaMercado.preco;
@@ -180,10 +139,7 @@ async function calcularComparacao() {
             }
         }
 
-        // Renderiza Resultados
         totalOtimizadoEl.innerText = `R$ ${totalOtimizado.toFixed(2).replace('.', ',')}`;
-        
-        // Renderiza Ranking
         rankingDiv.innerHTML = '';
         const ranking = Object.keys(precosPorMercado).map(mercado => ({
             nome: mercado,
@@ -191,7 +147,6 @@ async function calcularComparacao() {
             itens: contagemMercado[mercado]
         }));
 
-        // Ordena: Quem tem TODOS os itens primeiro, depois pelo preço
         ranking.sort((a, b) => {
             if (b.itens !== a.itens) return b.itens - a.itens;
             return a.total - b.total;
@@ -205,13 +160,8 @@ async function calcularComparacao() {
             const div = document.createElement('div');
             div.className = "bg-slate-800 p-4 rounded-xl flex justify-between items-center";
             div.innerHTML = `
-                <div>
-                    <h4 class="font-bold text-sm text-slate-200">${m.nome}</h4>
-                    <div class="flex gap-2 mt-1">${badge}</div>
-                </div>
-                <div class="text-right">
-                    <span class="block text-xl font-black ${corPreco}">R$ ${m.total.toFixed(2).replace('.', ',')}</span>
-                </div>
+                <div><h4 class="font-bold text-sm text-slate-200">${m.nome}</h4><div class="flex gap-2 mt-1">${badge}</div></div>
+                <div class="text-right"><span class="block text-xl font-black ${corPreco}">R$ ${m.total.toFixed(2).replace('.', ',')}</span></div>
             `;
             rankingDiv.appendChild(div);
         });
@@ -225,7 +175,6 @@ async function calcularComparacao() {
         btn.disabled = false;
     }
 }
-
 
 // --- SCANNER E CONSULTA ---
 async function iniciarCamera(modo) {
@@ -259,7 +208,6 @@ async function onScanSuccess(decodedText, modo) {
         return;
     }
 
-    // Modo Registrar
     document.getElementById('scanner-section').classList.add('hidden');
     document.getElementById('price-form-section').classList.remove('hidden');
     document.getElementById('ean-field').value = decodedText;
@@ -280,7 +228,6 @@ async function onScanSuccess(decodedText, modo) {
     finally { document.getElementById('product-name').disabled = false; }
 }
 
-// --- PESQUISAR COM BOTÃO ADICIONAR ---
 async function pesquisarPrecos() {
     const eanBusca = document.getElementById('ean-busca').value;
     const container = document.getElementById('resultados-consulta');
@@ -303,23 +250,26 @@ async function pesquisarPrecos() {
         }
 
         const lista = data.resultados.sort((a, b) => a.preco - b.preco);
-
-        // Pega o nome do produto do primeiro resultado para salvar no carrinho
         const nomeProdutoGeral = lista[0].produto;
 
-        // Cabeçalho com botão de Adicionar à Lista
+        // --- SOLUÇÃO ROBUSTA PARA O BOTÃO "ADICIONAR" ---
+        // Criamos o elemento Header via JS para evitar problemas com aspas no nome
         const headerDiv = document.createElement('div');
         headerDiv.className = "flex justify-between items-center mb-4 bg-purple-500/10 p-4 rounded-xl border border-purple-500/20";
-        headerDiv.innerHTML = `
-            <div>
-                <h3 class="text-sm font-bold text-white line-clamp-1">${nomeProdutoGeral}</h3>
-                <p class="text-[10px] text-slate-400">EAN: ${eanBusca}</p>
-            </div>
-            <button onclick="adicionarAoCarrinho('${eanBusca}', '${nomeProdutoGeral}')" class="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-lg shadow-lg active:scale-95 transition-all">
-                <i class="fas fa-plus"></i> Lista
-            </button>
-        `;
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.innerHTML = `<h3 class="text-sm font-bold text-white line-clamp-1">${nomeProdutoGeral}</h3><p class="text-[10px] text-slate-400">EAN: ${eanBusca}</p>`;
+        
+        const btnAdd = document.createElement('button');
+        btnAdd.className = "bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg shadow-lg active:scale-95 transition-all font-bold text-xs flex items-center gap-2";
+        btnAdd.innerHTML = '<i class="fas fa-plus"></i> Adicionar';
+        // Event Listener direto (resolve o problema das aspas)
+        btnAdd.addEventListener('click', () => adicionarAoCarrinho(eanBusca, nomeProdutoGeral));
+
+        headerDiv.appendChild(infoDiv);
+        headerDiv.appendChild(btnAdd);
         container.appendChild(headerDiv);
+        // ---------------------------------------------------
 
         lista.forEach((item, index) => {
             const eMaisBarato = index === 0;
@@ -327,6 +277,10 @@ async function pesquisarPrecos() {
 
             const card = document.createElement('div');
             card.className = `p-4 rounded-2xl mb-4 relative overflow-hidden flex gap-4 ${eMaisBarato ? 'bg-gradient-to-br from-yellow-500 to-orange-600 shadow-xl border border-yellow-300 transform scale-[1.02]' : 'bg-slate-800 border border-slate-700'}`;
+            
+            // Botãozinho extra de adicionar dentro do card (opcional, mas útil)
+            // Note que usamos um botão com posição absoluta
+            const btnAddSmallHTML = `<button class="add-cart-btn absolute bottom-2 right-2 w-8 h-8 rounded-full bg-slate-900/50 hover:bg-purple-500 text-white flex items-center justify-center z-20 backdrop-blur-md transition-colors"><i class="fas fa-plus text-[10px]"></i></button>`;
 
             card.innerHTML = `
                 ${eMaisBarato ? '<div class="absolute -top-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>' : ''}
@@ -340,6 +294,17 @@ async function pesquisarPrecos() {
                     <div class="flex justify-between items-end border-t ${eMaisBarato ? 'border-white/20' : 'border-slate-700'} pt-2 mt-2"><div class="flex items-center gap-1.5"><i class="fas fa-user text-[10px]"></i><span class="text-[10px] font-bold">${item.usuario || 'Anônimo'}</span></div><span class="text-[9px] opacity-60">${new Date(item.data).toLocaleDateString('pt-BR').slice(0,5)}</span></div>
                 </div>
             `;
+            
+            // Adicionamos o botão pequeno ao card e configuramos o clique
+            const btnSmallDiv = document.createElement('div');
+            btnSmallDiv.innerHTML = btnAddSmallHTML;
+            const btnSmall = btnSmallDiv.firstChild;
+            btnSmall.addEventListener('click', (e) => {
+                e.stopPropagation(); // Evita cliques indesejados
+                adicionarAoCarrinho(eanBusca, nomeProdutoGeral);
+            });
+            card.appendChild(btnSmall);
+
             container.appendChild(card);
         });
     } catch (err) {
