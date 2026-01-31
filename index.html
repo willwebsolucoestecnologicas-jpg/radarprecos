@@ -4,20 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Radar de Preços | WillWeb</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
-    
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.05); }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
         #reader { border-radius: 1rem; overflow: hidden; border: 2px solid #334155; position: relative; }
         #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
-        
         .loader { width: 24px; height: 24px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
         @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -31,7 +27,8 @@
                 <h1 class="text-lg font-black tracking-tight text-white">RADAR<span class="text-yellow-500">PREÇO</span></h1>
             </div>
             <div class="flex items-center gap-3">
-                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-mono">v4.4</span>
+                <div id="cart-counter" class="hidden bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">0</div>
+                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-mono">v5.0</span>
             </div>
         </div>
     </header>
@@ -41,79 +38,37 @@
         <div id="registrar-container" class="fade-in">
             <section id="scanner-section" class="space-y-6">
                 <div class="text-center space-y-1">
-                    <h2 class="text-2xl font-bold text-white">Registrar Preço</h2>
+                    <h2 class="text-2xl font-bold text-white">Registrar</h2>
                     <p class="text-slate-400 text-sm">Escaneie para contribuir</p>
-                    <p id="scan-message" class="text-yellow-400 text-xs font-bold hidden mt-2 animate-pulse">
-                        <i class="fas fa-circle-notch fa-spin mr-1"></i> Iniciando...
-                    </p>
+                    <p id="scan-message" class="text-yellow-400 text-xs font-bold hidden mt-2"><i class="fas fa-circle-notch fa-spin"></i> Iniciando...</p>
                 </div>
-                
                 <div class="relative group">
                     <div id="reader" class="w-full aspect-square bg-slate-900 shadow-2xl relative z-10">
-                        <div class="absolute inset-0 flex items-center justify-center text-slate-700">
-                            <i class="fas fa-camera text-4xl opacity-20"></i>
-                        </div>
+                         <div class="absolute inset-0 flex items-center justify-center text-slate-700"><i class="fas fa-camera text-4xl opacity-20"></i></div>
                     </div>
                 </div>
-
-                <button id="start-scan-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold shadow-lg shadow-blue-900/40 active:scale-95 transition-all text-white border-t border-blue-400/20">
+                <button id="start-scan-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold shadow-lg shadow-blue-900/40 text-white border-t border-blue-400/20">
                     <i class="fas fa-qrcode"></i> Abrir Câmera
                 </button>
             </section>
-
+            
             <section id="price-form-section" class="hidden space-y-4">
                 <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
                     <div class="flex justify-between items-center mb-4 relative z-10">
-                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fas fa-pen-to-square text-blue-400"></i> Detalhes
-                        </h3>
+                        <h3 class="text-lg font-bold text-white">Detalhes</h3>
                         <button onclick="location.reload()" class="text-xs text-red-400 font-semibold">Cancelar</button>
                     </div>
-                    
-                    <div class="flex justify-center mb-4">
-                        <img id="preview-imagem" src="" class="w-24 h-24 object-contain rounded-lg bg-white p-1 hidden">
-                    </div>
-
+                    <div class="flex justify-center mb-4"><img id="preview-imagem" src="" class="w-24 h-24 object-contain rounded-lg bg-white p-1 hidden"></div>
                     <form id="price-form" class="space-y-4 relative z-10">
                         <div class="grid grid-cols-4 gap-2">
-                            <div class="col-span-1">
-                                <label class="text-[10px] text-slate-500 font-bold pl-1">EAN</label>
-                                <input type="text" id="ean-field" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-400 text-center" readonly>
-                            </div>
-                            <div class="col-span-3">
-                                <label class="text-[10px] text-slate-500 font-bold pl-1">Produto</label>
-                                <input type="text" id="product-name" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white font-semibold outline-none">
-                            </div>
+                            <div class="col-span-1"><label class="text-[10px] text-slate-500 font-bold pl-1">EAN</label><input type="text" id="ean-field" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-400 text-center" readonly></div>
+                            <div class="col-span-3"><label class="text-[10px] text-slate-500 font-bold pl-1">Produto</label><input type="text" id="product-name" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white font-semibold outline-none"></div>
                         </div>
-
                         <input type="hidden" id="image-url-field">
-
-                        <div>
-                            <label class="text-[10px] text-slate-500 font-bold pl-1">Preço</label>
-                            <div class="relative">
-                                <span class="absolute left-4 top-3.5 text-slate-500">R$</span>
-                                <input type="number" id="price" step="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-lg text-white font-bold outline-none" placeholder="0,00" required>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="text-[10px] text-slate-500 font-bold pl-1">Local</label>
-                            <div class="relative">
-                                <i class="fas fa-store absolute left-4 top-4 text-slate-500 text-xs"></i>
-                                <select id="market" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white appearance-none outline-none" required>
-                                    <option value="">Carregando...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="text-[10px] text-slate-500 font-bold pl-1">Seu Nome</label>
-                            <div class="relative">
-                                <i class="fas fa-user absolute left-4 top-4 text-slate-500 text-xs"></i>
-                                <input type="text" id="username" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none" placeholder="Ex: Will" required>
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-all mt-2">
-                            <i class="fas fa-check mr-2"></i> Confirmar
-                        </button>
+                        <div><label class="text-[10px] text-slate-500 font-bold pl-1">Preço</label><div class="relative"><span class="absolute left-4 top-3.5 text-slate-500">R$</span><input type="number" id="price" step="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-lg text-white font-bold outline-none" placeholder="0,00" required></div></div>
+                        <div><label class="text-[10px] text-slate-500 font-bold pl-1">Local</label><div class="relative"><i class="fas fa-store absolute left-4 top-4 text-slate-500 text-xs"></i><select id="market" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white appearance-none outline-none" required><option value="">Carregando...</option></select></div></div>
+                        <div><label class="text-[10px] text-slate-500 font-bold pl-1">Seu Nome</label><div class="relative"><i class="fas fa-user absolute left-4 top-4 text-slate-500 text-xs"></i><input type="text" id="username" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white outline-none" placeholder="Ex: Will" required></div></div>
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-white shadow-lg mt-2">Confirmar</button>
                     </form>
                 </div>
             </section>
@@ -121,52 +76,67 @@
 
         <div id="consultar-container" class="hidden fade-in px-1">
             <div class="text-center mb-6 space-y-1">
-                <h2 class="text-2xl font-bold text-white">Pesquisar Ofertas</h2>
+                <h2 class="text-2xl font-bold text-white">Pesquisar</h2>
                 <p class="text-slate-400 text-sm">Encontre o menor preço</p>
             </div>
-
             <div class="relative mb-8 flex gap-2">
                 <div class="relative flex-1 bg-slate-900 rounded-xl shadow-2xl border border-slate-800 flex items-center">
                     <input type="number" id="ean-busca" placeholder="Digite ou escaneie..." class="w-full bg-transparent p-3 pl-4 text-white placeholder-slate-500 outline-none font-mono">
-                    <button id="btn-scan-pesquisa" class="p-3 text-blue-400 hover:text-white transition-colors border-l border-slate-700">
-                        <i class="fas fa-barcode text-xl"></i>
-                    </button>
+                    <button id="btn-scan-pesquisa" class="p-3 text-blue-400 hover:text-white border-l border-slate-700"><i class="fas fa-barcode text-xl"></i></button>
                 </div>
-                
-                <button id="btn-pesquisar" class="bg-yellow-500 hover:bg-yellow-400 text-slate-900 px-5 rounded-xl font-bold transition-colors flex items-center justify-center shadow-lg shadow-yellow-900/20">
-                    <i class="fas fa-search"></i>
-                </button>
+                <button id="btn-pesquisar" class="bg-yellow-500 hover:bg-yellow-400 text-slate-900 px-5 rounded-xl font-bold flex items-center justify-center shadow-lg"><i class="fas fa-search"></i></button>
+            </div>
+            <div id="resultados-consulta" class="space-y-4 pb-20">
+                <div class="text-center py-10 opacity-30"><i class="fas fa-box-open text-6xl mb-4"></i><p class="text-sm">Resultados aparecerão aqui.</p></div>
+            </div>
+        </div>
+
+        <div id="carrinho-container" class="hidden fade-in px-1">
+            <div class="text-center mb-6 space-y-1">
+                <h2 class="text-2xl font-bold text-white">Lista Inteligente</h2>
+                <p class="text-slate-400 text-sm">Comparador de Economia</p>
             </div>
 
-            <div id="resultados-consulta" class="space-y-4 pb-20">
-                <div class="text-center py-10 opacity-30">
-                    <i class="fas fa-box-open text-6xl mb-4"></i>
-                    <p class="text-sm">Resultados aparecerão aqui.</p>
+            <div id="lista-itens-carrinho" class="space-y-2 mb-8">
+                <div class="text-center py-10 opacity-30"><i class="fas fa-cart-shopping text-6xl mb-4"></i><p class="text-sm">Sua lista está vazia.</p></div>
+            </div>
+
+            <button id="btn-calcular-carrinho" class="hidden w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 py-4 rounded-xl font-bold text-white shadow-lg shadow-indigo-900/40 active:scale-95 transition-all mb-8">
+                <i class="fas fa-calculator mr-2"></i> Calcular Melhor Compra
+            </button>
+
+            <div id="resultado-comparacao" class="space-y-6 hidden pb-24">
+                
+                <div class="bg-slate-900 border border-emerald-500/30 p-5 rounded-2xl relative overflow-hidden">
+                    <div class="absolute -right-6 -top-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-xl"></div>
+                    <p class="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">Melhor Cenário (Misturando)</p>
+                    <h3 class="text-3xl font-black text-white" id="total-otimizado">R$ 0,00</h3>
+                    <p class="text-xs text-slate-400 mt-2">Comprando cada item onde está mais barato.</p>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2"><i class="fas fa-store"></i> Se comprar tudo em um lugar só:</h3>
+                    <div id="ranking-mercados" class="space-y-3">
+                        </div>
                 </div>
             </div>
         </div>
 
     </main>
 
-    <div id="toast-notification" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-500 -translate-y-24 opacity-0 border border-white/10 backdrop-blur-md pointer-events-none">
-        <i id="toast-icon" class="fas fa-check-circle text-xl"></i>
-        <span id="toast-message">Sucesso!</span>
+    <div id="toast-notification" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-500 -translate-y-32 opacity-0 border border-white/10 backdrop-blur-md pointer-events-none w-max max-w-[90%]">
+        <i id="toast-icon" class="fas fa-check-circle text-xl"></i><span id="toast-message">Sucesso!</span>
     </div>
 
     <nav class="fixed bottom-0 left-0 w-full bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-2 pb-5 z-50">
         <div class="flex justify-around items-center max-w-md mx-auto">
-            <button id="nav-registrar" class="flex flex-col items-center justify-center w-full py-2 group text-blue-400">
-                <div class="mb-1 p-1"><i class="fas fa-plus-circle text-2xl"></i></div>
-                <span class="text-[10px] font-bold uppercase tracking-widest opacity-80">Registrar</span>
-            </button>
-            <div class="w-px h-8 bg-slate-800"></div>
-            <button id="nav-consultar" class="flex flex-col items-center justify-center w-full py-2 group text-slate-500 hover:text-yellow-400">
-                <div class="mb-1 p-1"><i class="fas fa-search text-2xl"></i></div>
-                <span class="text-[10px] font-bold uppercase tracking-widest opacity-80">Consultar</span>
-            </button>
+            <button id="nav-registrar" class="nav-btn group text-blue-400 w-full"><div class="mb-1"><i class="fas fa-plus-circle text-2xl"></i></div><span class="text-[9px] font-bold uppercase tracking-widest opacity-80">Registrar</span></button>
+            <button id="nav-consultar" class="nav-btn group text-slate-500 w-full"><div class="mb-1"><i class="fas fa-search text-2xl"></i></div><span class="text-[9px] font-bold uppercase tracking-widest opacity-80">Consultar</span></button>
+            <button id="nav-carrinho" class="nav-btn group text-slate-500 w-full relative"><div class="mb-1"><i class="fas fa-cart-shopping text-2xl"></i></div><span class="text-[9px] font-bold uppercase tracking-widest opacity-80">Lista</span></button>
         </div>
     </nav>
-
+    
+    <style>.nav-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.5rem 0; transition: color 0.3s; }</style>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="script.js"></script>
 </body>
