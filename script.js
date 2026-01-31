@@ -1,11 +1,11 @@
-// script.js - v6.2 (NAVEGAÇÃO CORRIGIDA E SCANNER INTELIGENTE)
+// script.js - v6.4 (URL CORRETA E LÓGICA ESTÁVEL)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 
 let html5QrCode;
 let scannerIsRunning = false;
 let carrinho = JSON.parse(localStorage.getItem('radar_carrinho')) || []; 
 
-// --- FUNÇÕES UTILITÁRIAS ---
+// --- UTILITÁRIOS ---
 function mostrarNotificacao(mensagem, tipo = 'sucesso') {
     const toast = document.getElementById('toast-notification');
     const toastMsg = document.getElementById('toast-message');
@@ -44,29 +44,23 @@ function comprimirImagem(file) {
     });
 }
 
-// --- NAVEGAÇÃO ENTRE ABAS ---
+// --- NAVEGAÇÃO ---
 async function trocarAba(aba) {
-    // Esconde todas as seções
     const abas = ['registrar', 'consultar', 'carrinho'];
     abas.forEach(a => document.getElementById(a + '-container').classList.add('hidden'));
     
-    // Reseta visual do menu
     document.getElementById('nav-registrar').className = "nav-btn text-slate-500";
     document.getElementById('nav-consultar').className = "nav-btn text-slate-500";
     document.getElementById('nav-carrinho').className = "nav-btn text-slate-500";
 
-    // Para a câmera se estiver rodando
     if (scannerIsRunning && html5QrCode) {
         try { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; } catch(e){}
     }
 
-    // Mostra a aba desejada
     document.getElementById(aba + '-container').classList.remove('hidden');
     
-    // Ativa a cor no menu
     if (aba === 'registrar') {
         document.getElementById('nav-registrar').className = "nav-btn text-blue-400";
-        // Garante que o título esteja correto (pode ter sido alterado pelo scanner de busca)
         document.querySelector('#scanner-section h2').textContent = "Registrar";
     }
     if (aba === 'consultar') document.getElementById('nav-consultar').className = "nav-btn text-yellow-400";
@@ -80,55 +74,40 @@ async function trocarAba(aba) {
 async function iniciarCamera(modo) {
     if (scannerIsRunning) return;
 
-    // CONFIGURAÇÃO VISUAL INTELIGENTE
     const msg = document.getElementById('scan-message');
     const tituloScanner = document.querySelector('#scanner-section h2');
-    
     msg.classList.remove('hidden');
     msg.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> Iniciando...`;
 
-    // Se for PESQUISA, a gente "toma emprestado" a tela de registro, mas disfarça
     if (modo === 'pesquisar') {
-        // Esconde a tela de consulta
         document.getElementById('consultar-container').classList.add('hidden');
-        // Mostra o container do scanner (que fica no registrar)
         document.getElementById('registrar-container').classList.remove('hidden');
         document.getElementById('scanner-section').classList.remove('hidden');
         document.getElementById('price-form-section').classList.add('hidden');
         
-        // TRUQUE: Mantém o menu "Consultar" aceso para o usuário não se perder
         document.getElementById('nav-registrar').className = "nav-btn text-slate-500";
         document.getElementById('nav-consultar').className = "nav-btn text-yellow-400";
         
-        // Muda o título para fazer sentido
         tituloScanner.textContent = "Pesquisar Código";
-        document.getElementById('start-scan-btn').classList.add('hidden'); // Esconde botão manual
+        document.getElementById('start-scan-btn').classList.add('hidden');
     } else {
-        // Modo Registrar Normal
         tituloScanner.textContent = "Registrar";
     }
     
     try {
         if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
         scannerIsRunning = true;
-        await html5QrCode.start(
-            { facingMode: "environment" }, 
-            { fps: 10, qrbox: { width: 250, height: 250 } }, 
-            (texto) => onScanSuccess(texto, modo)
-        );
+        await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, (t) => onScanSuccess(t, modo));
     } catch (err) {
         scannerIsRunning = false;
-        mostrarNotificacao("Erro ao abrir câmera.", "erro");
+        mostrarNotificacao("Erro câmera.", "erro");
         msg.classList.add('hidden');
         document.getElementById('start-scan-btn').classList.remove('hidden');
-        
-        // Se der erro no modo pesquisa, volta para a tela de consulta
         if (modo === 'pesquisar') trocarAba('consultar');
     }
 }
 
 async function onScanSuccess(decodedText, modo) {
-    // 1. Para a câmera
     if (html5QrCode) {
         html5QrCode.stop().then(() => {
             document.getElementById('reader').innerHTML = '';
@@ -136,29 +115,21 @@ async function onScanSuccess(decodedText, modo) {
         }).catch(() => scannerIsRunning = false);
     }
 
-    // 2. SE FOR MODO PESQUISA: Volta para Consultar
     if (modo === 'pesquisar') {
-        // Restaura o título original
         document.querySelector('#scanner-section h2').textContent = "Registrar";
-        
-        // Volta para a tela de consulta
         await trocarAba('consultar');
-        
-        // Preenche e busca
         document.getElementById('ean-busca').value = decodedText;
         pesquisarPrecos();
         return;
     }
 
-    // 3. SE FOR MODO REGISTRAR: Abre o Formulário
+    // Modo Registrar
     document.getElementById('scanner-section').classList.add('hidden');
     document.getElementById('price-form-section').classList.remove('hidden');
-    
     document.getElementById('ean-field').value = decodedText;
     document.getElementById('product-name').value = "Buscando...";
     document.getElementById('product-name').disabled = true;
     
-    // Limpa foto anterior
     const imgPreview = document.getElementById('preview-imagem');
     const btnFoto = document.getElementById('btn-camera-foto');
     const urlField = document.getElementById('image-url-field');
@@ -182,7 +153,7 @@ async function onScanSuccess(decodedText, modo) {
         } else {
             imgPreview.classList.add('hidden');
             btnFoto.classList.remove('hidden');
-            btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Adicionar Foto</span>';
+            btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>';
         }
     } catch (e) { 
         document.getElementById('product-name').value = "";
@@ -220,28 +191,23 @@ async function pesquisarPrecos() {
 
         const headerDiv = document.createElement('div');
         headerDiv.className = "flex justify-between items-center mb-4 bg-purple-500/10 p-4 rounded-xl border border-purple-500/20";
-        
-        const infoDiv = document.createElement('div');
-        infoDiv.innerHTML = `<h3 class="text-sm font-bold text-white line-clamp-1">${nomeProdutoGeral}</h3><p class="text-[10px] text-slate-400">EAN: ${eanBusca}</p>`;
+        headerDiv.innerHTML = `<div><h3 class="text-sm font-bold text-white line-clamp-1">${nomeProdutoGeral}</h3><p class="text-[10px] text-slate-400">EAN: ${eanBusca}</p></div>`;
         
         const btnAdd = document.createElement('button');
         btnAdd.className = "bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg shadow-lg active:scale-95 transition-all font-bold text-xs flex items-center gap-2";
         btnAdd.innerHTML = '<i class="fas fa-plus"></i> Adicionar';
         btnAdd.addEventListener('click', () => adicionarAoCarrinho(eanBusca, nomeProdutoGeral));
-
-        headerDiv.appendChild(infoDiv);
         headerDiv.appendChild(btnAdd);
+        
         container.appendChild(headerDiv);
 
         lista.forEach((item, index) => {
             const eMaisBarato = index === 0;
             const imgUrl = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
-
+            
             const card = document.createElement('div');
             card.className = `p-4 rounded-2xl mb-4 relative overflow-hidden flex gap-4 ${eMaisBarato ? 'bg-gradient-to-br from-yellow-500 to-orange-600 shadow-xl border border-yellow-300 transform scale-[1.02]' : 'bg-slate-800 border border-slate-700'}`;
             
-            const btnAddSmallHTML = `<button class="add-cart-btn absolute bottom-2 right-2 w-8 h-8 rounded-full bg-slate-900/50 hover:bg-purple-500 text-white flex items-center justify-center z-20 backdrop-blur-md transition-colors"><i class="fas fa-plus text-[10px]"></i></button>`;
-
             card.innerHTML = `
                 ${eMaisBarato ? '<div class="absolute -top-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>' : ''}
                 <div class="w-16 h-16 bg-white/10 rounded-xl p-1 flex-shrink-0 flex items-center justify-center border border-white/10"><img src="${imgUrl}" class="max-w-full max-h-full object-contain"></div>
@@ -254,15 +220,6 @@ async function pesquisarPrecos() {
                     <div class="flex justify-between items-end border-t ${eMaisBarato ? 'border-white/20' : 'border-slate-700'} pt-2 mt-2"><div class="flex items-center gap-1.5"><i class="fas fa-user text-[10px]"></i><span class="text-[10px] font-bold">${item.usuario || 'Anônimo'}</span></div><span class="text-[9px] opacity-60">${new Date(item.data).toLocaleDateString('pt-BR').slice(0,5)}</span></div>
                 </div>
             `;
-            
-            const btnSmallDiv = document.createElement('div');
-            btnSmallDiv.innerHTML = btnAddSmallHTML;
-            const btnSmall = btnSmallDiv.firstChild;
-            btnSmall.addEventListener('click', (e) => {
-                e.stopPropagation();
-                adicionarAoCarrinho(eanBusca, nomeProdutoGeral);
-            });
-            card.appendChild(btnSmall);
             container.appendChild(card);
         });
     } catch (err) {
@@ -297,10 +254,63 @@ async function salvarPreco(e) {
     }
 }
 
-// --- CARRINHO & COMPARAÇÃO (MANTER IGUAL) ---
-// (Inclui as funções atualizarContadorCarrinho, adicionarAoCarrinho, removerDoCarrinho, renderizarCarrinho, calcularComparacao)
-// Por brevidade, essas funções não mudaram, mas certifique-se de que estão no arquivo (elas já estão lá em cima no código unificado).
-// O código acima já inclui a maioria, mas falta o bloco "calcularComparacao" que vou repetir aqui para garantir:
+// --- CARRINHO ---
+function atualizarContadorCarrinho() {
+    const contador = document.getElementById('cart-counter');
+    if (carrinho.length > 0) {
+        contador.textContent = carrinho.length;
+        contador.classList.remove('hidden');
+    } else {
+        contador.classList.add('hidden');
+    }
+    localStorage.setItem('radar_carrinho', JSON.stringify(carrinho));
+}
+
+function adicionarAoCarrinho(ean, produto) {
+    if (!carrinho.find(item => item.ean === ean)) {
+        carrinho.push({ ean, produto });
+        atualizarContadorCarrinho();
+        mostrarNotificacao("Item adicionado à lista!");
+    } else {
+        mostrarNotificacao("Item já está na lista!", "erro");
+    }
+}
+
+function removerDoCarrinho(index) {
+    carrinho.splice(index, 1);
+    atualizarContadorCarrinho();
+    renderizarCarrinho();
+}
+
+function renderizarCarrinho() {
+    const container = document.getElementById('lista-itens-carrinho');
+    const btnCalcular = document.getElementById('btn-calcular-carrinho');
+    const resultadoDiv = document.getElementById('resultado-comparacao');
+    
+    container.innerHTML = '';
+    resultadoDiv.classList.add('hidden'); 
+
+    if (carrinho.length === 0) {
+        container.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-cart-shopping text-6xl mb-4"></i><p class="text-sm">Lista vazia.</p></div>`;
+        btnCalcular.classList.add('hidden');
+        return;
+    }
+
+    btnCalcular.classList.remove('hidden');
+
+    carrinho.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = "bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center";
+        div.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs">${index + 1}</div>
+                <p class="text-sm font-bold text-white line-clamp-1">${item.produto}</p>
+            </div>
+            <button onclick="removerDoCarrinho(${index})" class="text-red-500 hover:text-red-400 p-2"><i class="fas fa-trash"></i></button>
+        `;
+        container.appendChild(div);
+    });
+}
 
 async function calcularComparacao() {
     const btn = document.getElementById('btn-calcular-carrinho');
@@ -372,7 +382,7 @@ async function calcularComparacao() {
     }
 }
 
-// --- INICIALIZAÇÃO ---
+// --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
     loadMarkets();
     atualizarContadorCarrinho();
@@ -389,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('price-form').addEventListener('submit', salvarPreco);
     document.getElementById('btn-calcular-carrinho').addEventListener('click', calcularComparacao);
     
+    // Config Câmera Foto
     const btnFoto = document.getElementById('btn-camera-foto');
     const inputFoto = document.getElementById('input-foto-produto');
     const imgPreview = document.getElementById('preview-imagem');
@@ -408,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     urlField.value = base64; 
                 } catch(err) {
                     mostrarNotificacao("Erro na foto", "erro");
-                    btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Adicionar Foto</span>';
+                    btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>';
                 }
             }
         });
