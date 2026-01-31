@@ -131,3 +131,36 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelBtn.addEventListener('click', () => location.reload());
     }
 });
+
+async function loadMarkets() {
+    const marketSelect = document.getElementById('market');
+    
+    try {
+        // Busca a lista real da sua aba "Estabelecimentos"
+        const response = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?acao=buscarMercados`, {
+            method: 'GET',
+            redirect: 'follow'
+        });
+        const data = await response.json();
+
+        if (data.sucesso) {
+            marketSelect.innerHTML = '<option value="">Selecione um local</option>';
+            data.mercados.forEach(nome => {
+                const option = document.createElement('option');
+                option.value = nome;
+                option.textContent = nome;
+                marketSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error("Erro ao carregar mercados:", error);
+        // Fallback caso a planilha esteja vazia ou dê erro
+        marketSelect.innerHTML = '<option value="Mercado Geral">Mercado Geral (Erro ao carregar)</option>';
+    }
+}
+
+// Chame essa função dentro do DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    loadMarkets(); // <--- Isso vai preencher o select automaticamente
+    // ... resto dos seus event listeners
+});
