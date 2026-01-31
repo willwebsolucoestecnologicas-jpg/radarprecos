@@ -1,12 +1,43 @@
-// script.js - ESTE FICA NO GITHUB
+// script.js - FRONTEND COMPLETO E ATUALIZADO
 
-const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; // <--- COLOQUE SUA URL AQUI
-
-// script.js - FRONTEND (GITHUB) 
+// 1. COLOQUE AQUI SUA URL DO APPS SCRIPT (A que termina em /exec)
+const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 
 let html5QrCode;
 
-// --- FUNÇÃO PARA INICIAR O SCANNER ---
+// --- FUNÇÃO 1: CARREGAR A LISTA DE MERCADOS (NOVIDADE!) ---
+async function loadMarkets() {
+    const marketSelect = document.getElementById('market');
+    
+    try {
+        // Chama o backend pedindo a lista de mercados
+        const response = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?acao=buscarMercados`, {
+            method: 'GET',
+            redirect: 'follow'
+        });
+        
+        const data = await response.json();
+
+        if (data.sucesso && data.mercados.length > 0) {
+            marketSelect.innerHTML = '<option value="">Selecione um local</option>';
+            // Cria uma opção para cada mercado encontrado na planilha
+            data.mercados.forEach(nome => {
+                const option = document.createElement('option');
+                option.value = nome;
+                option.textContent = nome;
+                marketSelect.appendChild(option);
+            });
+        } else {
+            marketSelect.innerHTML = '<option value="">Nenhum local encontrado</option>';
+        }
+    } catch (error) {
+        console.error("Erro ao carregar mercados:", error);
+        // Fallback caso dê erro na conexão
+        marketSelect.innerHTML = '<option value="Outros">Outros (Erro ao carregar)</option>';
+    }
+}
+
+// --- FUNÇÃO 2: INICIAR O SCANNER ---
 async function startScanner() {
     const startBtn = document.getElementById('start-scan-btn');
     const scanMsg = document.getElementById('scan-message');
@@ -36,20 +67,19 @@ async function startScanner() {
         
     } catch (err) {
         console.error("Erro ao abrir câmera:", err);
-        alert("Erro ao abrir câmera: " + err);
+        alert("Erro ao abrir câmera. Verifique se o site tem permissão HTTPS.");
         scanMsg.textContent = "Erro ao acessar câmera.";
         startBtn.disabled = false;
     }
 }
 
-// --- FUNÇÃO CHAMADA QUANDO O CÓDIGO É LIDO COM SUCESSO ---
+// --- FUNÇÃO 3: QUANDO O SCANNER LÊ O CÓDIGO ---
 async function onScanSuccess(decodedText, decodedResult) {
     try {
-        // Para o scanner para economizar bateria e processamento
         await html5QrCode.stop();
         document.getElementById('scan-message').textContent = "Buscando produto...";
 
-        // CONSULTA O BACKEND (GET) - Aqui usamos o 'redirect: follow'
+        // Busca o produto no Backend
         const response = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?ean=${decodedText}`, {
             method: 'GET',
             redirect: 'follow' 
@@ -57,24 +87,22 @@ async function onScanSuccess(decodedText, decodedResult) {
         
         const data = await response.json();
 
-        // Preenche os campos do formulário
+        // Preenche o formulário
         document.getElementById('ean-field').value = decodedText;
-        document.getElementById('product-name').value = data.nome || "Produto de Teste";
+        document.getElementById('product-name').value = data.nome || "Produto não identificado";
         
-        // Transição visual para o formulário
+        // Troca a tela para o formulário
         document.getElementById('scanner-section').classList.add('hidden');
         document.getElementById('price-form-section').classList.remove('hidden');
         document.getElementById('price-form-section').style.opacity = "1";
         
     } catch (error) {
-        console.error(error);
-        alert("Erro de comunicação: " + error);
-        // Se der erro, volta o botão para tentar novamente
+        alert("Erro ao buscar produto: " + error);
         document.getElementById('start-scan-btn').disabled = false;
     }
 }
 
-// --- FUNÇÃO PARA ENVIAR OS DADOS PARA A PLANILHA ---
+// --- FUNÇÃO 4: ENVIAR PREÇO PARA A PLANILHA ---
 async function enviarParaPlanilha(e) {
     e.preventDefault();
     
@@ -93,74 +121,42 @@ async function enviarParaPlanilha(e) {
     };
 
     try {
-        // ENVIO DOS DADOS (POST)
         await fetch(APPS_SCRIPT_WEB_APP_URL, {
             method: 'POST',
-            mode: 'no-cors', // Essencial para evitar bloqueio de CORS no POST do Google
-            cache: 'no-cache',
+            mode: 'no-cors', // Essencial para o POST funcionar
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        alert("Sucesso! Preço registrado na planilha.");
-        
-        // Limpa e reinicia a página para um novo scan
-        location.reload(); 
+        alert("Sucesso! Preço registrado.");
+        location.reload(); // Recarrega para o próximo scan
 
     } catch (err) {
-        console.error(err);
-        alert("Erro ao salvar dados: " + err);
+        alert("Erro ao salvar: " + err);
         btnSubmit.disabled = false;
         btnSubmit.textContent = originalText;
     }
 }
 
-// --- INICIALIZAÇÃO DOS EVENTOS ---
+// --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Botão de Iniciar Scan
+    loadMarkets(); // <--- Carrega a lista de mercados assim que abre o site
+
     const startBtn = document.getElementById('start-scan-btn');
     if(startBtn) startBtn.addEventListener('click', startScanner);
     
-    // Formulário de Preço
     const form = document.getElementById('price-form');
     if(form) form.addEventListener('submit', enviarParaPlanilha);
 
-    // Botão de Cancelar (Opcional, se existir no seu HTML)
     const cancelBtn = document.getElementById('cancel-scan-btn');
-    if(cancelBtn) {
-        cancelBtn.addEventListener('click', () => location.reload());
-    }
-});
-
-async function loadMarkets() {
-    const marketSelect = document.getElementById('market');
+    if(cancelBtn) cancelBtn.addEventListener('click', () => location.reload());
     
-    try {
-        // Busca a lista real da sua aba "Estabelecimentos"
-        const response = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?acao=buscarMercados`, {
-            method: 'GET',
-            redirect: 'follow'
-        });
-        const data = await response.json();
-
-        if (data.sucesso) {
-            marketSelect.innerHTML = '<option value="">Selecione um local</option>';
-            data.mercados.forEach(nome => {
-                const option = document.createElement('option');
-                option.value = nome;
-                option.textContent = nome;
-                marketSelect.appendChild(option);
-            });
-        }
-    } catch (error) {
-        console.error("Erro ao carregar mercados:", error);
-        // Fallback caso a planilha esteja vazia ou dê erro
-        marketSelect.innerHTML = '<option value="Mercado Geral">Mercado Geral (Erro ao carregar)</option>';
-    }
-}
-
-// Chame essa função dentro do DOMContentLoaded
-document.addEventListener('DOMContentLoaded', () => {
-    loadMarkets(); // <--- Isso vai preencher o select automaticamente
-    // ... resto dos seus event listeners
+    // Recupera o nome do usuário salvo anteriormente
+    const savedUser = localStorage.getItem('radar_username');
+    if (savedUser) document.getElementById('username').value = savedUser;
+    
+    // Salva o nome do usuário quando ele digita
+    document.getElementById('username').addEventListener('input', (e) => {
+        localStorage.setItem('radar_username', e.target.value);
+    });
 });
