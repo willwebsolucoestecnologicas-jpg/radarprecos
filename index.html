@@ -4,114 +4,179 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Radar de Preços | WillWeb</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .glass { background: rgba(30, 41, 59, 0.9); backdrop-filter: blur(12px); }
-        /* Esta classe é essencial para o JS encontrar as abas */
-        .tab-content { transition: opacity 0.3s ease-in-out; }
+        .glass { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.05); }
         .gradient-text {
-            background: linear-gradient(90deg, #60a5fa, #34d399);
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        /* Classe para destacar a aba ativa no menu */
-        .active-tab { color: #60a5fa; border-top: 2px solid #60a5fa; }
-        #reader { border-radius: 1rem; overflow: hidden; border: 2px solid #334155; }
-        #reader video { object-fit: cover !important; }
+        /* Animação suave para troca de abas */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        #reader { border-radius: 1rem; overflow: hidden; border: 2px solid #334155; position: relative; }
+        #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
+        
+        /* Loader */
+        .loader { width: 24px; height: 24px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; display: inline-block; box-sizing: border-box; animation: rotation 1s linear infinite; }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen pb-24">
-
-    <header class="sticky top-0 z-40 w-full glass border-b border-slate-800 p-4">
-        <div class="max-w-md mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold gradient-text">Radar de Preços</h1>
-            <span class="text-xs bg-slate-800 px-2 py-1 rounded-full border border-slate-700">v3.1</span>
+<body class="bg-slate-950 text-slate-100 min-h-screen pb-28"> <header class="sticky top-0 z-40 w-full glass">
+        <div class="max-w-md mx-auto flex justify-between items-center p-4">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-bolt text-yellow-500"></i>
+                <h1 class="text-lg font-black tracking-tight text-white">RADAR<span class="text-yellow-500">PREÇO</span></h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-mono">BETA</span>
+            </div>
         </div>
     </header>
 
-    <main class="max-w-md mx-auto p-4">
+    <main class="max-w-md mx-auto p-4 relative">
         
-        <section id="tab-registrar" class="tab-content space-y-6">
-            <div id="scanner-container" class="space-y-4">
-                <div class="text-center">
-                    <h2 class="text-2xl font-semibold">Escanear Produto</h2>
-                    <p class="text-slate-400 text-sm">Aponte para o código de barras</p>
-                    <p id="scan-message" class="text-emerald-400 text-sm font-bold hidden mt-2">Iniciando...</p>
+        <div id="registrar-container" class="fade-in">
+            
+            <section id="scanner-section" class="space-y-6">
+                <div class="text-center space-y-1">
+                    <h2 class="text-2xl font-bold text-white">Escanear Produto</h2>
+                    <p class="text-slate-400 text-sm">Aponte a câmera para o código de barras</p>
+                    <p id="scan-message" class="text-yellow-400 text-xs font-bold hidden mt-2 animate-pulse">
+                        <i class="fas fa-circle-notch fa-spin mr-1"></i> Iniciando câmera...
+                    </p>
                 </div>
                 
-                <div id="reader" class="w-full aspect-square bg-slate-900 shadow-2xl relative"></div>
+                <div class="relative group">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+                    <div id="reader" class="w-full aspect-square bg-slate-900 shadow-2xl relative z-10">
+                        <div class="absolute inset-0 flex items-center justify-center text-slate-700">
+                            <i class="fas fa-camera text-4xl opacity-20"></i>
+                        </div>
+                    </div>
+                </div>
 
-                <button id="start-scan-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95 flex justify-center items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    Abrir Câmera
+                <button id="start-scan-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold shadow-lg shadow-blue-900/40 transition-all active:scale-95 flex justify-center items-center gap-2 text-white border-t border-blue-400/20">
+                    <i class="fas fa-qrcode"></i> Abrir Câmera
                 </button>
-            </div>
+            </section>
 
-            <div id="price-form-section" class="hidden space-y-4 animate-bounce-in">
-                <div class="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-lg font-bold text-blue-400">Novo Registro</h3>
-                        <button id="cancel-scan-btn" class="text-xs text-red-400 font-semibold">Cancelar</button>
+            <section id="price-form-section" class="hidden space-y-4">
+                <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full blur-xl -mr-10 -mt-10"></div>
+                    
+                    <div class="flex justify-between items-center mb-6 relative z-10">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fas fa-pen-to-square text-blue-400"></i> Novo Registro
+                        </h3>
+                        <button onclick="location.reload()" class="text-xs text-red-400 font-semibold hover:text-red-300">
+                            Cancelar
+                        </button>
                     </div>
                     
-                    <form id="price-form" class="space-y-3">
-                        <input type="text" id="product-name" placeholder="Nome do Produto" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 outline-none text-white" required>
-                        <input type="number" id="price" step="0.01" placeholder="Preço (R$)" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 outline-none text-white" required>
-                        <select id="market" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 outline-none text-white" required>
-                            <option value="">Carregando locais...</option>
-                        </select>
-                        <input type="text" id="username" placeholder="Seu Nome" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 outline-none text-white" required>
-                        <input type="hidden" id="ean-field">
+                    <form id="price-form" class="space-y-4 relative z-10">
+                        <div class="grid grid-cols-4 gap-2">
+                            <div class="col-span-1">
+                                <label class="text-[10px] text-slate-500 uppercase font-bold pl-1">EAN</label>
+                                <input type="text" id="ean-field" class="w-full bg-slate-950/50 border border-slate-700 rounded-lg p-3 text-xs text-slate-400 text-center" readonly>
+                            </div>
+                            <div class="col-span-3">
+                                <label class="text-[10px] text-slate-500 uppercase font-bold pl-1">Produto</label>
+                                <input type="text" id="product-name" class="w-full bg-slate-950/50 border border-slate-700 rounded-lg p-3 text-sm text-white font-semibold focus:border-blue-500 outline-none transition-colors">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] text-slate-500 uppercase font-bold pl-1">Preço</label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3.5 text-slate-500">R$</span>
+                                <input type="number" id="price" step="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-lg text-white font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0,00" required>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] text-slate-500 uppercase font-bold pl-1">Local</label>
+                            <div class="relative">
+                                <i class="fas fa-store absolute left-4 top-4 text-slate-500 text-xs"></i>
+                                <select id="market" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white appearance-none focus:ring-2 focus:ring-blue-500 outline-none" required>
+                                    <option value="">Carregando locais...</option>
+                                </select>
+                                <i class="fas fa-chevron-down absolute right-4 top-4 text-slate-600 text-xs pointer-events-none"></i>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] text-slate-500 uppercase font-bold pl-1">Seu Nome</label>
+                            <div class="relative">
+                                <i class="fas fa-user absolute left-4 top-4 text-slate-500 text-xs"></i>
+                                <input type="text" id="username" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 pl-10 text-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Will" required>
+                            </div>
+                        </div>
                         
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-bold active:scale-95 transition-all text-white shadow-lg shadow-emerald-900/20">
-                            Salvar Preço
+                        <button type="submit" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 py-4 rounded-xl font-bold text-white shadow-lg shadow-emerald-900/30 active:scale-95 transition-all mt-2">
+                            <i class="fas fa-check mr-2"></i> Confirmar Preço
                         </button>
                     </form>
                 </div>
-            </div>
-        </section>
+            </section>
+        </div>
 
-        <section id="tab-consultar" class="tab-content hidden space-y-6">
-            <div class="text-center">
-                <h2 class="text-2xl font-semibold">Pesquisar Ofertas</h2>
-                <p class="text-slate-400 text-sm">Encontre o menor preço</p>
-            </div>
-
-            <div class="relative">
-                <input type="text" id="search-input" placeholder="Ex: Café, 789..." class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 pr-14 focus:ring-2 focus:ring-emerald-500 outline-none text-white placeholder-slate-500">
-                <button id="search-btn" class="absolute right-2 top-2 bottom-2 aspect-square bg-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                </button>
+        <div id="consultar-container" class="hidden fade-in px-1">
+            <div class="text-center mb-6 space-y-1">
+                <h2 class="text-2xl font-bold text-white">Pesquisar Ofertas</h2>
+                <p class="text-slate-400 text-sm">Encontre o menor preço na cidade</p>
             </div>
 
-            <div id="search-results" class="space-y-4 pb-20">
+            <div class="relative mb-8 group">
+                <div class="absolute -inset-0.5 bg-gradient-to-r from-yellow-600 to-orange-600 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-200"></div>
+                <div class="relative flex bg-slate-900 rounded-xl p-1 shadow-2xl">
+                    <input type="number" id="ean-busca" placeholder="Digite o código (EAN)..." class="w-full bg-transparent p-3 pl-4 text-white placeholder-slate-500 outline-none font-mono">
+                    <button id="btn-pesquisar" class="bg-yellow-500 hover:bg-yellow-400 text-slate-900 px-6 rounded-lg font-bold transition-colors flex items-center justify-center">
+                        <i class="fas fa-search"></i>
+                    </button>
                 </div>
-        </section>
+            </div>
+
+            <div id="resultados-consulta" class="space-y-4 pb-20">
+                <div class="text-center py-10 opacity-30">
+                    <i class="fas fa-barcode text-6xl mb-4"></i>
+                    <p class="text-sm">Digite um código acima para pesquisar.</p>
+                </div>
+            </div>
+        </div>
 
     </main>
 
-    <nav class="fixed bottom-0 w-full glass border-t border-slate-800 px-6 py-3 flex justify-around items-center z-50">
-        <button id="nav-registrar" class="flex flex-col items-center gap-1 active-tab transition-all w-1/2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            <span class="text-[10px] font-bold uppercase tracking-widest">Registrar</span>
-        </button>
-        <button id="nav-consultar" class="flex flex-col items-center gap-1 text-slate-500 transition-all w-1/2 hover:text-slate-300">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <span class="text-[10px] font-bold uppercase tracking-widest">Consultar</span>
-        </button>
+    <nav class="fixed bottom-0 left-0 w-full bg-slate-900/90 backdrop-blur-md border-t border-slate-800 p-2 pb-5 z-50">
+        <div class="flex justify-around items-center max-w-md mx-auto">
+            
+            <button id="nav-registrar" class="flex flex-col items-center justify-center w-full py-2 group text-blue-400">
+                <div class="mb-1 p-1 rounded-lg group-hover:bg-blue-500/10 transition-all">
+                    <i class="fas fa-plus-circle text-2xl"></i>
+                </div>
+                <span class="text-[10px] font-bold uppercase tracking-widest opacity-80">Registrar</span>
+            </button>
+
+            <div class="w-px h-8 bg-slate-800"></div>
+
+            <button id="nav-consultar" class="flex flex-col items-center justify-center w-full py-2 group text-slate-500 hover:text-yellow-400 transition-colors">
+                <div class="mb-1 p-1 rounded-lg group-hover:bg-yellow-500/10 transition-all">
+                    <i class="fas fa-search text-2xl"></i>
+                </div>
+                <span class="text-[10px] font-bold uppercase tracking-widest opacity-80">Consultar</span>
+            </button>
+            
+        </div>
     </nav>
 
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
-
