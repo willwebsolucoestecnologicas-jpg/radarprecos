@@ -160,3 +160,55 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('radar_username', e.target.value);
     });
 });
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+    document.getElementById(`tab-${tab}`).classList.remove('hidden');
+}
+
+async function pesquisarOfertas() {
+    const busca = document.getElementById('search-input').value;
+    const container = document.getElementById('search-results');
+    container.innerHTML = "<p class='text-center'>Buscando melhores preços...</p>";
+
+    const response = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?acao=buscarPrecos&busca=${busca}`, { redirect: 'follow' });
+    const data = await response.json();
+
+    if (data.sucesso && data.ofertas.length > 0) {
+        let html = "";
+        
+        // Header com Detalhes do Produto (API Cosmos)
+        if (data.detalhes) {
+            html += `
+                <div class="bg-slate-800 p-4 rounded-xl mb-4 border-l-4 border-emerald-500">
+                    <div class="flex items-center gap-4">
+                        <img src="${data.detalhes.thumbnail || 'https://via.placeholder.com/100'}" class="w-20 h-20 rounded-lg object-contain bg-white">
+                        <div>
+                            <h3 class="font-bold text-lg">${data.detalhes.nome}</h3>
+                            <p class="text-sm text-gray-400">${data.detalhes.marca}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Lista de Preços
+        data.ofertas.forEach(item => {
+            html += `
+                <div class="bg-slate-800 p-4 rounded-xl flex justify-between items-center shadow-lg border border-slate-700">
+                    <div>
+                        <p class="text-emerald-400 font-bold text-xl">R$ ${item.preco.toFixed(2)}</p>
+                        <p class="text-sm text-gray-300 font-semibold">${item.mercado}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] text-gray-500">Visto em: ${item.data}</p>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = "<p class='text-center text-gray-400'>Nenhum preço encontrado para este produto.</p>";
+    }
+}
+
