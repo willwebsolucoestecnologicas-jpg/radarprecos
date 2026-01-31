@@ -4,18 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Radar de Preços | WillWeb</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.05); }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Scanner Style */
         #reader { border-radius: 1rem; overflow: hidden; border: 2px solid #334155; position: relative; }
         #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
+        
+        /* Loaders e Animações */
         .loader { width: 24px; height: 24px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
         @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Ajuste do Menu */
+        .nav-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.5rem 0; transition: color 0.3s; }
+        
+        /* Esconder elementos padrão da biblioteca de QR */
+        div[data-html5-qrcode-id="html5-qrcode-button-camera-start"], div[data-html5-qrcode-id="html5-qrcode-select-camera"] { display: none !important; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen pb-28">
@@ -28,7 +40,7 @@
             </div>
             <div class="flex items-center gap-3">
                 <div id="cart-counter" class="hidden bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">0</div>
-                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-mono">v5.0</span>
+                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-mono">v6.4</span>
             </div>
         </div>
     </header>
@@ -58,7 +70,16 @@
                         <h3 class="text-lg font-bold text-white">Detalhes</h3>
                         <button onclick="location.reload()" class="text-xs text-red-400 font-semibold">Cancelar</button>
                     </div>
-                    <div class="flex justify-center mb-4"><img id="preview-imagem" src="" class="w-24 h-24 object-contain rounded-lg bg-white p-1 hidden"></div>
+                    
+                    <div class="flex justify-center mb-4 relative">
+                        <img id="preview-imagem" src="" class="w-24 h-24 object-contain rounded-lg bg-white p-1 hidden border border-slate-700">
+                        <div id="btn-camera-foto" class="w-24 h-24 bg-slate-800 border-2 border-dashed border-slate-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all hidden">
+                            <i class="fas fa-camera text-slate-400 text-2xl mb-1"></i>
+                            <span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>
+                        </div>
+                        <input type="file" id="input-foto-produto" capture="environment" accept="image/*" class="hidden">
+                    </div>
+
                     <form id="price-form" class="space-y-4 relative z-10">
                         <div class="grid grid-cols-4 gap-2">
                             <div class="col-span-1"><label class="text-[10px] text-slate-500 font-bold pl-1">EAN</label><input type="text" id="ean-field" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-400 text-center" readonly></div>
@@ -96,28 +117,21 @@
                 <h2 class="text-2xl font-bold text-white">Lista Inteligente</h2>
                 <p class="text-slate-400 text-sm">Comparador de Economia</p>
             </div>
-
             <div id="lista-itens-carrinho" class="space-y-2 mb-8">
                 <div class="text-center py-10 opacity-30"><i class="fas fa-cart-shopping text-6xl mb-4"></i><p class="text-sm">Sua lista está vazia.</p></div>
             </div>
-
-            <button id="btn-calcular-carrinho" class="hidden w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 py-4 rounded-xl font-bold text-white shadow-lg shadow-indigo-900/40 active:scale-95 transition-all mb-8">
-                <i class="fas fa-calculator mr-2"></i> Calcular Melhor Compra
+            <button id="btn-calcular-carrinho" class="hidden w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 py-4 rounded-xl font-bold text-white shadow-lg mb-8">
+                <i class="fas fa-calculator mr-2"></i> Calcular
             </button>
-
             <div id="resultado-comparacao" class="space-y-6 hidden pb-24">
-                
                 <div class="bg-slate-900 border border-emerald-500/30 p-5 rounded-2xl relative overflow-hidden">
                     <div class="absolute -right-6 -top-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-xl"></div>
-                    <p class="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">Melhor Cenário (Misturando)</p>
+                    <p class="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">Melhor Cenário</p>
                     <h3 class="text-3xl font-black text-white" id="total-otimizado">R$ 0,00</h3>
-                    <p class="text-xs text-slate-400 mt-2">Comprando cada item onde está mais barato.</p>
                 </div>
-
                 <div>
-                    <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2"><i class="fas fa-store"></i> Se comprar tudo em um lugar só:</h3>
-                    <div id="ranking-mercados" class="space-y-3">
-                        </div>
+                    <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2"><i class="fas fa-store"></i> Por Mercado:</h3>
+                    <div id="ranking-mercados" class="space-y-3"></div>
                 </div>
             </div>
         </div>
@@ -135,8 +149,7 @@
             <button id="nav-carrinho" class="nav-btn group text-slate-500 w-full relative"><div class="mb-1"><i class="fas fa-cart-shopping text-2xl"></i></div><span class="text-[9px] font-bold uppercase tracking-widest opacity-80">Lista</span></button>
         </div>
     </nav>
-    
-    <style>.nav-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.5rem 0; transition: color 0.3s; }</style>
+
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="script.js"></script>
 </body>
