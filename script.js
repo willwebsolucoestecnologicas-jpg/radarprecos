@@ -1,22 +1,50 @@
-// script.js - v4.3 STABLE
+// script.js - v4.4 STABLE
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 
 let html5QrCode;
-let scannerIsRunning = false; // Trava de segurança da câmera
+let scannerIsRunning = false; 
 
-// --- 1. NAVEGAÇÃO SEGURA ---
+// --- FUNÇÃO DE NOTIFICAÇÃO ---
+function mostrarNotificacao(mensagem, tipo = 'sucesso') {
+    const toast = document.getElementById('toast-notification');
+    const toastMsg = document.getElementById('toast-message');
+    const toastIcon = document.getElementById('toast-icon');
+
+    // Configura Texto
+    toastMsg.textContent = mensagem;
+
+    // Configura Cores e Ícone
+    if (tipo === 'erro') {
+        toast.classList.remove('bg-emerald-600');
+        toast.classList.add('bg-red-500');
+        toastIcon.className = 'fas fa-circle-xmark text-xl';
+    } else {
+        toast.classList.remove('bg-red-500');
+        toast.classList.add('bg-emerald-600');
+        toastIcon.className = 'fas fa-circle-check text-xl';
+    }
+
+    // Mostra (Animação)
+    toast.classList.remove('-translate-y-24', 'opacity-0');
+    
+    // Esconde depois de 3 segundos
+    setTimeout(() => {
+        toast.classList.add('-translate-y-24', 'opacity-0');
+    }, 3000);
+}
+
+// --- 1. NAVEGAÇÃO ---
 async function trocarAba(aba) {
     const reg = document.getElementById('registrar-container');
     const cons = document.getElementById('consultar-container');
     const navReg = document.getElementById('nav-registrar');
     const navCons = document.getElementById('nav-consultar');
     
-    // Se a câmera estiver ligada, desliga com segurança antes de trocar
     if (scannerIsRunning && html5QrCode) {
         try {
             await html5QrCode.stop();
             scannerIsRunning = false;
-            document.getElementById('reader').innerHTML = ''; // Limpa o DOM do scanner
+            document.getElementById('reader').innerHTML = '';
         } catch (e) { console.log("Erro ao limpar câmera:", e); }
     }
 
@@ -33,9 +61,8 @@ async function trocarAba(aba) {
     }
 }
 
-// --- 2. SCANNER BLINDADO (CORREÇÃO DO ERRO) ---
+// --- 2. SCANNER ---
 async function iniciarCamera(modo) {
-    // Se já estiver rodando, não faz nada (previne o clique duplo e o erro de transição)
     if (scannerIsRunning) return;
 
     if (modo === 'pesquisar') {
@@ -49,33 +76,28 @@ async function iniciarCamera(modo) {
     
     try {
         if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-        
-        // Configuração vital para evitar erros de estado
         scannerIsRunning = true;
         
         await html5QrCode.start(
             { facingMode: "environment" }, 
             { fps: 10, qrbox: { width: 250, height: 250 } }, 
-            (texto) => onScanSuccess(texto, modo) // Passa o modo para o sucesso
+            (texto) => onScanSuccess(texto, modo)
         );
     } catch (err) {
         scannerIsRunning = false;
-        alert("Erro ao iniciar câmera. Recarregue a página.");
-        console.error(err);
+        mostrarNotificacao("Erro na câmera. Recarregue a página.", "erro");
         msg.classList.add('hidden');
         document.getElementById('start-scan-btn').classList.remove('hidden');
     }
 }
 
 async function onScanSuccess(decodedText, modo) {
-    // Para o scanner imediatamente
     if (html5QrCode) {
         await html5QrCode.stop();
         scannerIsRunning = false;
-        document.getElementById('reader').innerHTML = ''; // Limpa visualmente
+        document.getElementById('reader').innerHTML = '';
     }
 
-    // Lógica de Redirecionamento
     if (modo === 'pesquisar') {
         await trocarAba('consultar');
         document.getElementById('ean-busca').value = decodedText;
@@ -119,13 +141,13 @@ async function onScanSuccess(decodedText, modo) {
     }
 }
 
-// --- 3. VISUAL RESTAURADO (CARD DOURADO PREMIUM) ---
+// --- 3. CONSULTA (COM DESCRIÇÃO E NOME) ---
 async function pesquisarPrecos() {
     const eanBusca = document.getElementById('ean-busca').value;
     const container = document.getElementById('resultados-consulta');
     const btn = document.getElementById('btn-pesquisar');
     
-    if (!eanBusca) return alert("Digite um código!");
+    if (!eanBusca) return mostrarNotificacao("Digite um código!", "erro");
     
     const iconeOriginal = btn.innerHTML;
     btn.innerHTML = '<div class="loader w-4 h-4 border-slate-900"></div>';
@@ -149,12 +171,11 @@ async function pesquisarPrecos() {
 
         lista.forEach((item, index) => {
             const eMaisBarato = index === 0;
-            // Ícone genérico de sacola de compras se não tiver foto
             const imgUrl = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/1170/1170678.png";
 
             const card = document.createElement('div');
             
-            // O VISUAL QUE VOCÊ GOSTAVA (Restaurado)
+            // Criando o CARD via Template String (Necessário pois os dados vêm da planilha)
             card.className = `p-4 rounded-2xl mb-4 relative overflow-hidden transition-all flex gap-4 ${
                 eMaisBarato 
                 ? 'bg-gradient-to-br from-yellow-500 to-orange-600 shadow-xl shadow-orange-900/30 border border-yellow-300 transform scale-[1.02]' 
@@ -177,11 +198,15 @@ async function pesquisarPrecos() {
                             </span>
                         </div>` : ''}
                         
+                        <h4 class="text-[10px] font-bold uppercase ${eMaisBarato ? 'text-yellow-100' : 'text-slate-400'} mb-1 leading-tight line-clamp-2 pr-12">
+                            ${item.produto}
+                        </h4>
+
                         <h3 class="text-3xl font-black tracking-tighter ${eMaisBarato ? 'text-white drop-shadow-sm' : 'text-emerald-400'}">
                             R$ ${item.preco.toFixed(2).replace('.', ',')}
                         </h3>
                         
-                        <p class="font-bold text-xs uppercase ${eMaisBarato ? 'text-yellow-100' : 'text-slate-300'} line-clamp-1 mt-0.5">
+                        <p class="font-bold text-xs uppercase ${eMaisBarato ? 'text-white' : 'text-slate-300'} line-clamp-1 mt-0.5 opacity-80">
                             <i class="fas fa-store mr-1 opacity-70"></i> ${item.mercado}
                         </p>
                     </div>
@@ -202,7 +227,7 @@ async function pesquisarPrecos() {
             container.appendChild(card);
         });
     } catch (err) {
-        alert("Erro na pesquisa: " + err);
+        mostrarNotificacao("Erro na pesquisa", "erro");
         btn.innerHTML = iconeOriginal;
     }
 }
@@ -227,10 +252,13 @@ async function salvarPreco(e) {
 
     try {
         await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-        alert("Salvo com sucesso!");
-        location.reload();
+        
+        // NOVA NOTIFICAÇÃO TOAST
+        mostrarNotificacao("Preço registrado com sucesso!");
+        
+        setTimeout(() => location.reload(), 2000); 
     } catch (err) {
-        alert("Erro ao salvar: " + err);
+        mostrarNotificacao("Erro ao salvar.", "erro");
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
@@ -242,14 +270,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('nav-registrar').addEventListener('click', () => trocarAba('registrar'));
     document.getElementById('nav-consultar').addEventListener('click', () => trocarAba('consultar'));
-    
-    // Note a chamada para iniciarCamera('registrar')
     document.getElementById('start-scan-btn').addEventListener('click', () => iniciarCamera('registrar'));
     
-    // Botão de scanner na barra de pesquisa (ícone de código de barras)
-    const btnScanSearch = document.querySelector('button[onclick*="pesquisar"]');
+    // Botão Scanner na aba Pesquisa
+    const btnScanSearch = document.getElementById('btn-scan-pesquisa');
     if (btnScanSearch) {
-        btnScanSearch.onclick = null; // Remove o handler inline antigo
         btnScanSearch.addEventListener('click', (e) => {
             e.preventDefault();
             iniciarCamera('pesquisar');
