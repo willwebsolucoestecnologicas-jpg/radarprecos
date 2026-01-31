@@ -1,12 +1,11 @@
-// script.js - v6.0 FINAL (CÂMERA, UPLOAD E LISTA INTELIGENTE)
+// script.js - v6.1 (CORREÇÃO DE TRAVAMENTO E FORMULÁRIO IMEDIATO)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 
 let html5QrCode;
 let scannerIsRunning = false;
 let carrinho = JSON.parse(localStorage.getItem('radar_carrinho')) || []; 
 
-// --- 1. FUNÇÕES UTILITÁRIAS (NOTIFICAÇÃO E COMPRESSÃO) ---
-
+// --- FUNÇÕES UTILITÁRIAS ---
 function mostrarNotificacao(mensagem, tipo = 'sucesso') {
     const toast = document.getElementById('toast-notification');
     const toastMsg = document.getElementById('toast-message');
@@ -24,7 +23,6 @@ function mostrarNotificacao(mensagem, tipo = 'sucesso') {
     setTimeout(() => toast.classList.add('-translate-y-32', 'opacity-0'), 3000);
 }
 
-// Função essencial para reduzir o tamanho da foto antes de enviar (evita erro no Google)
 function comprimirImagem(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -35,19 +33,18 @@ function comprimirImagem(file) {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                const maxWidth = 800; // Redimensiona para max 800px
+                const maxWidth = 800; 
                 const scale = maxWidth / img.width;
                 canvas.width = maxWidth;
                 canvas.height = img.height * scale;
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                // Retorna JPEG com qualidade 0.6 (leve e boa qualidade)
                 resolve(canvas.toDataURL('image/jpeg', 0.6));
             };
         };
     });
 }
 
-// --- 2. NAVEGAÇÃO ---
+// --- NAVEGAÇÃO ---
 async function trocarAba(aba) {
     const abas = ['registrar', 'consultar', 'carrinho'];
     abas.forEach(a => document.getElementById(a + '-container').classList.add('hidden'));
@@ -56,8 +53,12 @@ async function trocarAba(aba) {
     document.getElementById('nav-consultar').className = "nav-btn text-slate-500";
     document.getElementById('nav-carrinho').className = "nav-btn text-slate-500";
 
+    // Tenta parar a câmera, mas não bloqueia se falhar
     if (scannerIsRunning && html5QrCode) {
-        try { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; } catch(e){}
+        html5QrCode.stop().then(() => {
+            document.getElementById('reader').innerHTML = '';
+            scannerIsRunning = false;
+        }).catch(err => console.log("Erro ao parar câmera (ignorado):", err));
     }
 
     document.getElementById(aba + '-container').classList.remove('hidden');
@@ -70,7 +71,7 @@ async function trocarAba(aba) {
     }
 }
 
-// --- 3. GESTÃO DO CARRINHO ---
+// --- GESTÃO DO CARRINHO ---
 function atualizarContadorCarrinho() {
     const contador = document.getElementById('cart-counter');
     if (carrinho.length > 0) {
@@ -128,7 +129,6 @@ function renderizarCarrinho() {
     });
 }
 
-// --- 4. LÓGICA DE COMPARAÇÃO DE PREÇOS ---
 async function calcularComparacao() {
     const btn = document.getElementById('btn-calcular-carrinho');
     const resultadoDiv = document.getElementById('resultado-comparacao');
@@ -200,7 +200,7 @@ async function calcularComparacao() {
     }
 }
 
-// --- 5. SCANNER E PROCESSAMENTO ---
+// --- LÓGICA DO SCANNER (AQUI ESTAVA O PROBLEMA) ---
 async function iniciarCamera(modo) {
     if (scannerIsRunning) return;
     if (modo === 'pesquisar') { await trocarAba('registrar'); document.getElementById('start-scan-btn').classList.add('hidden'); }
@@ -222,8 +222,18 @@ async function iniciarCamera(modo) {
 }
 
 async function onScanSuccess(decodedText, modo) {
-    if (html5QrCode) { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; }
+    // 1. PRIMEIRO: Tenta parar a câmera, mas SEM TRAVAR o código (sem await crítico)
+    if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+            document.getElementById('reader').innerHTML = '';
+            scannerIsRunning = false;
+        }).catch(err => {
+            console.warn("Câmera demorou a fechar, seguindo...", err);
+            scannerIsRunning = false; 
+        });
+    }
 
+    // 2. SEGUNDO: Resolve a Pesquisa se for o caso
     if (modo === 'pesquisar') {
         await trocarAba('consultar');
         document.getElementById('ean-busca').value = decodedText;
@@ -232,15 +242,16 @@ async function onScanSuccess(decodedText, modo) {
         return;
     }
 
-    // MODO REGISTRAR:
+    // 3. TERCEIRO: FORÇA O FORMULÁRIO A APARECER IMEDIATAMENTE (Vital!)
     document.getElementById('scanner-section').classList.add('hidden');
     document.getElementById('price-form-section').classList.remove('hidden');
     
+    // Preenche os dados visuais
     document.getElementById('ean-field').value = decodedText;
     document.getElementById('product-name').value = "Buscando...";
     document.getElementById('product-name').disabled = true;
     
-    // Reset da Área de Foto
+    // Reseta foto
     const imgPreview = document.getElementById('preview-imagem');
     const btnFoto = document.getElementById('btn-camera-foto');
     const urlField = document.getElementById('image-url-field');
@@ -250,34 +261,35 @@ async function onScanSuccess(decodedText, modo) {
     btnFoto.classList.add('hidden'); 
     urlField.value = "";
 
+    // 4. QUARTO: Faz a busca na API (Se falhar, o form já está aberto!)
     try {
         const res = await fetch(`${APPS_SCRIPT_URL}?ean=${decodedText}`, { redirect: 'follow' });
         const data = await res.json();
         
         document.getElementById('product-name').value = data.nome || "";
         
-        // LÓGICA DE IMAGEM INTELIGENTE
         if (data.imagem && data.imagem.startsWith('http')) {
-            // Se já tem imagem (da API ou Memória), mostra ela
             imgPreview.src = data.imagem;
             imgPreview.classList.remove('hidden');
             btnFoto.classList.add('hidden');
-            urlField.value = data.imagem; // Mantém a URL existente
+            urlField.value = data.imagem;
         } else {
-            // Se NÃO tem imagem, mostra o botão para tirar foto
             imgPreview.classList.add('hidden');
             btnFoto.classList.remove('hidden');
             btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Adicionar Foto</span>';
         }
 
     } catch (e) { 
+        // Se der erro na API, apenas limpa o nome e libera a foto
         document.getElementById('product-name').value = "";
-        btnFoto.classList.remove('hidden'); // Erro? Libera foto
+        btnFoto.classList.remove('hidden');
+        btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Adicionar Foto</span>';
     } 
-    finally { document.getElementById('product-name').disabled = false; }
+    finally { 
+        document.getElementById('product-name').disabled = false; 
+    }
 }
 
-// --- 6. PESQUISA E VISUALIZAÇÃO ---
 async function pesquisarPrecos() {
     const eanBusca = document.getElementById('ean-busca').value;
     const container = document.getElementById('resultados-consulta');
@@ -302,7 +314,6 @@ async function pesquisarPrecos() {
         const lista = data.resultados.sort((a, b) => a.preco - b.preco);
         const nomeProdutoGeral = lista[0].produto;
 
-        // Cabeçalho da Pesquisa (Nome + Botão Adicionar)
         const headerDiv = document.createElement('div');
         headerDiv.className = "flex justify-between items-center mb-4 bg-purple-500/10 p-4 rounded-xl border border-purple-500/20";
         
@@ -325,7 +336,6 @@ async function pesquisarPrecos() {
             const card = document.createElement('div');
             card.className = `p-4 rounded-2xl mb-4 relative overflow-hidden flex gap-4 ${eMaisBarato ? 'bg-gradient-to-br from-yellow-500 to-orange-600 shadow-xl border border-yellow-300 transform scale-[1.02]' : 'bg-slate-800 border border-slate-700'}`;
             
-            // Botão Mini (+) dentro do card
             const btnAddSmallHTML = `<button class="add-cart-btn absolute bottom-2 right-2 w-8 h-8 rounded-full bg-slate-900/50 hover:bg-purple-500 text-white flex items-center justify-center z-20 backdrop-blur-md transition-colors"><i class="fas fa-plus text-[10px]"></i></button>`;
 
             card.innerHTML = `
@@ -357,7 +367,6 @@ async function pesquisarPrecos() {
     }
 }
 
-// --- 7. SALVAR NOVO REGISTRO ---
 async function salvarPreco(e) {
     e.preventDefault();
     const btn = e.target.querySelector('button');
@@ -370,7 +379,7 @@ async function salvarPreco(e) {
         preco: document.getElementById('price').value,
         mercado: document.getElementById('market').value,
         usuario: document.getElementById('username').value,
-        imagem: document.getElementById('image-url-field').value // Envia URL ou Base64 da Foto
+        imagem: document.getElementById('image-url-field').value 
     };
 
     try {
@@ -383,27 +392,23 @@ async function salvarPreco(e) {
     }
 }
 
-// --- 8. INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
     loadMarkets();
     atualizarContadorCarrinho();
     
-    // Navegação
     document.getElementById('nav-registrar').addEventListener('click', () => trocarAba('registrar'));
     document.getElementById('nav-consultar').addEventListener('click', () => trocarAba('consultar'));
     document.getElementById('nav-carrinho').addEventListener('click', () => trocarAba('carrinho'));
     
-    // Scanner
     document.getElementById('start-scan-btn').addEventListener('click', () => iniciarCamera('registrar'));
+    document.getElementById('btn-calcular-carrinho').addEventListener('click', calcularComparacao);
+    
     const btnScanSearch = document.getElementById('btn-scan-pesquisa');
     if (btnScanSearch) btnScanSearch.addEventListener('click', (e) => { e.preventDefault(); iniciarCamera('pesquisar'); });
 
-    // Ações
-    document.getElementById('btn-calcular-carrinho').addEventListener('click', calcularComparacao);
     document.getElementById('btn-pesquisar').addEventListener('click', pesquisarPrecos);
     document.getElementById('price-form').addEventListener('submit', salvarPreco);
     
-    // Foto do Produto (Lógica do Clique)
     const btnFoto = document.getElementById('btn-camera-foto');
     const inputFoto = document.getElementById('input-foto-produto');
     const imgPreview = document.getElementById('preview-imagem');
@@ -414,13 +419,13 @@ document.addEventListener('DOMContentLoaded', () => {
         inputFoto.addEventListener('change', async (e) => {
             if(e.target.files && e.target.files[0]) {
                 const file = e.target.files[0];
-                btnFoto.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; // Loading
+                btnFoto.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; 
                 try {
-                    const base64 = await comprimirImagem(file); // Comprime
+                    const base64 = await comprimirImagem(file); 
                     imgPreview.src = base64;
                     imgPreview.classList.remove('hidden');
                     btnFoto.classList.add('hidden'); 
-                    urlField.value = base64; // Prepara para envio
+                    urlField.value = base64; 
                 } catch(err) {
                     mostrarNotificacao("Erro na foto", "erro");
                     btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Adicionar Foto</span>';
