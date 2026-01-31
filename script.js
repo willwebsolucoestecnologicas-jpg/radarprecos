@@ -79,25 +79,47 @@ async function pesquisarPrecos() {
             const eMaisBarato = index === 0;
             const card = document.createElement('div');
             
-            // Estilização dinâmica
-            card.className = `p-4 rounded-2xl mb-4 transition-all duration-300 shadow-lg ${
+            // Estilização dinâmica do Container
+            card.className = `p-4 rounded-2xl mb-4 transition-all duration-300 shadow-lg relative overflow-hidden ${
                 eMaisBarato 
                 ? 'bg-gradient-to-br from-yellow-500 to-orange-600 border-2 border-yellow-200 scale-105 shadow-yellow-500/20' 
                 : 'bg-gray-800 border border-gray-700'
             }`;
 
+            // HTML Interno do Card (Novo Design)
             card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        ${eMaisBarato ? '<span class="bg-yellow-200 text-yellow-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase mb-2 inline-block">Mínimo Histórico</span>' : ''}
-                        <h3 class="text-3xl font-black ${eMaisBarato ? 'text-white' : 'text-green-400'}">R$ ${item.preco.toFixed(2)}</h3>
-                        <p class="font-bold text-sm uppercase tracking-wide">${item.mercado}</p>
-                        <p class="text-[11px] opacity-80 mt-1">
-                            <i class="fas fa-user"></i> Inserido por: <strong>${item.usuario || 'Anônimo'}</strong>
+                ${eMaisBarato ? '<div class="absolute top-0 right-0 w-24 h-24 bg-yellow-400 opacity-10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>' : ''}
+                
+                <div class="z-10 w-full relative">
+                    ${eMaisBarato ? `
+                    <div class="flex items-center gap-1 mb-2">
+                        <span class="bg-yellow-100 text-yellow-900 text-[10px] font-black px-2 py-0.5 rounded shadow-sm uppercase tracking-wider border border-yellow-200 flex items-center">
+                            <i class="fas fa-trophy text-yellow-600 mr-1 text-xs"></i>Melhor Preço
+                        </span>
+                    </div>` : ''}
+
+                    <h3 class="text-3xl font-black tracking-tight ${eMaisBarato ? 'text-white drop-shadow-md' : 'text-emerald-400'}">
+                        R$ ${item.preco.toFixed(2).replace('.', ',')}
+                    </h3>
+                    
+                    <p class="font-bold text-sm text-gray-300 uppercase tracking-wide mt-1 flex items-center gap-2">
+                        <i class="fas fa-store text-gray-500 text-xs"></i> ${item.mercado}
+                    </p>
+
+                    <div class="mt-3 pt-3 border-t border-gray-700/50 flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-gray-700 p-1.5 rounded-full shadow-inner border border-gray-600 flex items-center justify-center w-8 h-8">
+                                <i class="fas fa-star text-yellow-400 text-xs"></i>
+                            </div>
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-gray-400 uppercase font-semibold leading-tight">Colaborador</span>
+                                <strong class="text-xs text-gray-200">${item.usuario || 'Anônimo'}</strong>
+                            </div>
+                        </div>
+                        
+                        <p class="text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                            ${new Date(item.data).toLocaleDateString('pt-BR')}
                         </p>
-                    </div>
-                    <div class="text-right">
-                        <p class="text-[10px] opacity-60">${new Date(item.data).toLocaleDateString('pt-BR')}</p>
                     </div>
                 </div>
             `;
@@ -151,4 +173,3 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('username').value = localStorage.getItem('user_radar') || '';
     document.getElementById('username').addEventListener('input', (e) => localStorage.setItem('user_radar', e.target.value));
 });
-
