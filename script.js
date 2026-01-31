@@ -1,5 +1,5 @@
 // script.js - FRONTEND (GITHUB)
-const APPS_SCRIPT_URL = 'SUA_URL_AQUI/exec'; 
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 let html5QrCode;
 
 // --- 1. CONTROLE DE NAVEGAÇÃO (TROCA DE ABAS) ---
@@ -151,3 +151,4 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('username').value = localStorage.getItem('user_radar') || '';
     document.getElementById('username').addEventListener('input', (e) => localStorage.setItem('user_radar', e.target.value));
 });
+
