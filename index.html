@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radar de Preços - Escaneie e Economize!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#4F46E5', // Indigo vibrante
+                        secondary: '#6EE7B7', // Verde menta
+                        accent: '#FACC15',    // Amarelo vibrante
+                        darkbg: '#1F2937',  // Cinza escuro para fundo
+                        darkcard: '#2D3748', // Cinza médio para cards
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-darkbg to-gray-900 text-white font-sans min-h-screen flex flex-col justify-center items-center p-4">
+
+    <main class="w-full max-w-md bg-darkcard rounded-3xl shadow-xl p-6 md:p-8 space-y-6 transform transition-all duration-500 hover:scale-105">
+        
+        <h1 class="font-heading text-4xl md:text-5xl font-bold text-center text-primary mb-8 tracking-tight gradient-text">Radar de Preços</h1>
+
+        <section id="scanner-section" class="space-y-4">
+            <h2 class="text-2xl font-heading font-semibold text-center text-secondary mb-4">Escanear Produto</h2>
+            <div id="reader" class="w-full aspect-video bg-gray-700 rounded-lg overflow-hidden relative shadow-inner">
+                <div class="scanner-overlay animate-pulse"></div>
+            </div>
+            <button id="start-scan-btn" class="w-full bg-primary hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:-translate-y-1 shadow-lg button-glow">
+                Iniciar Scanner
+            </button>
+            <p id="scan-message" class="text-center text-gray-400 mt-2 text-sm italic hidden">Aguardando leitura do código de barras...</p>
+        </section>
+
+        <section id="price-form-section" class="space-y-4 hidden opacity-0 transition-opacity duration-500">
+            <h2 class="text-2xl font-heading font-semibold text-center text-secondary mb-4">Registrar Preço</h2>
+            <form id="price-form" class="space-y-4">
+                <div>
+                    <label for="ean-field" class="block text-sm font-medium text-gray-300 mb-1">Código de Barras (EAN)</label>
+                    <input type="text" id="ean-field" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-primary focus:border-primary transition duration-200" readonly>
+                </div>
+                <div>
+                    <label for="product-name" class="block text-sm font-medium text-gray-300 mb-1">Nome do Produto</label>
+                    <input type="text" id="product-name" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-primary focus:border-primary transition duration-200">
+                </div>
+                <div>
+                    <label for="price" class="block text-sm font-medium text-gray-300 mb-1">Preço (R$)</label>
+                    <input type="number" id="price" step="0.01" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-primary focus:border-primary transition duration-200" placeholder="Ex: 5.99" required>
+                </div>
+                <div>
+                    <label for="market" class="block text-sm font-medium text-gray-300 mb-1">Mercado/Farmácia</label>
+                    <select id="market" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-primary focus:border-primary transition duration-200" required>
+                        <option value="">Selecione um local</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-300 mb-1">Seu Nome/Apelido</label>
+                    <input type="text" id="username" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-primary focus:border-primary transition duration-200" placeholder="Ex: Will" required>
+                </div>
+                <button type="submit" class="w-full bg-secondary hover:bg-emerald-500 text-darkbg font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:-translate-y-1 shadow-lg button-glow">
+                    Registrar Preço
+                </button>
+                <button type="button" id="cancel-scan-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 mt-2">
+                    Cancelar e Escanear Outro
+                </button>
+            </form>
+        </section>
+
+        </main>
+
+    <footer class="mt-8 text-gray-400 text-sm text-center">
+        &copy; 2026 Radar de Preços. Desenvolvido por Will.
+    </footer>
+
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
