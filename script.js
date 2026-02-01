@@ -1,4 +1,4 @@
-// script.js - v8.3 (Carrinho Restaurado + Chat Fixo)
+// script.js - v8.4 (Botões de Adicionar + Correções)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 let html5QrCode;
@@ -6,11 +6,10 @@ let scannerIsRunning = false;
 let catalogoDados = [];
 let carrinho = JSON.parse(localStorage.getItem('kalango_cart')) || [];
 
-// --- CARRINHO / LISTA DE COMPRAS ---
+// --- CARRINHO ---
 function toggleCarrinho() {
     const modal = document.getElementById('cart-modal');
     const content = document.getElementById('cart-content');
-    
     if (modal.classList.contains('hidden')) {
         renderizarCarrinho();
         modal.classList.remove('hidden');
@@ -31,7 +30,8 @@ function atualizarContadorCarrinho() {
 }
 
 function adicionarAoCarrinho(produto, preco, mercado) {
-    const id = produto + mercado; // ID único simples
+    // ID único para agrupar (Produto + Mercado)
+    const id = produto + mercado; 
     const existente = carrinho.find(i => i.id === id);
     
     if (existente) {
@@ -43,12 +43,11 @@ function adicionarAoCarrinho(produto, preco, mercado) {
     salvarCarrinho();
     mostrarNotificacao(`+1 ${produto} na lista!`);
     
-    // Efeito visual de pulo no botão
+    // Animação no botão flutuante
     const btnCart = document.querySelector('.fixed.bottom-24');
     if(btnCart) {
-        btnCart.classList.remove('animate-bounce-slow');
-        void btnCart.offsetWidth; // Trigger reflow
-        btnCart.classList.add('animate-bounce-slow');
+        btnCart.classList.add('scale-125');
+        setTimeout(() => btnCart.classList.remove('scale-125'), 200);
     }
 }
 
@@ -78,7 +77,7 @@ function renderizarCarrinho() {
     const totalItemsEl = document.getElementById('cart-total-items');
     
     if (carrinho.length === 0) {
-        container.innerHTML = `<div class="text-center py-20 opacity-30"><i class="fas fa-basket-shopping text-4xl mb-3"></i><p>Sua lista está vazia.</p></div>`;
+        container.innerHTML = `<div class="text-center py-20 opacity-30"><i class="fas fa-basket-shopping text-4xl mb-3"></i><p>Lista vazia.</p></div>`;
         totalEl.textContent = "R$ 0,00";
         totalItemsEl.textContent = "0 itens";
         return;
@@ -91,37 +90,28 @@ function renderizarCarrinho() {
     carrinho.forEach(item => {
         total += item.preco * item.qtd;
         qtdTotal += item.qtd;
-        
         const div = document.createElement('div');
         div.className = "flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700";
         div.innerHTML = `
             <div>
-                <h4 class="text-sm font-bold text-white">${item.produto}</h4>
+                <h4 class="text-sm font-bold text-white line-clamp-1">${item.produto}</h4>
                 <p class="text-[10px] text-slate-400">${item.mercado}</p>
                 <p class="text-xs text-emerald-400 font-bold mt-1">${item.qtd}x R$ ${item.preco.toFixed(2)}</p>
             </div>
-            <button onclick="removerDoCarrinho('${item.id}')" class="text-red-400 hover:text-red-300 p-2">
-                <i class="fas fa-trash"></i>
-            </button>
+            <button onclick="removerDoCarrinho('${item.id}')" class="text-red-400 p-2"><i class="fas fa-trash"></i></button>
         `;
         container.appendChild(div);
     });
 
     totalEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
-    totalItemsEl.textContent = `${qtdTotal} itens na lista`;
+    totalItemsEl.textContent = `${qtdTotal} itens`;
 }
 
 // --- NAVEGAÇÃO ---
 async function trocarAba(aba) {
     const abas = ['registrar', 'consultar', 'catalogo', 'chat'];
-    abas.forEach(a => {
-        const el = document.getElementById(a + '-container');
-        if(el) el.classList.add('hidden');
-    });
-    abas.forEach(id => {
-        const btn = document.getElementById('nav-' + id);
-        if(btn) btn.className = "nav-btn text-slate-500";
-    });
+    abas.forEach(a => { const el = document.getElementById(a + '-container'); if(el) el.classList.add('hidden'); });
+    abas.forEach(id => { const btn = document.getElementById('nav-' + id); if(btn) btn.className = "nav-btn text-slate-500"; });
 
     if (scannerIsRunning && html5QrCode) {
         try { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; } catch(e){}
@@ -133,63 +123,30 @@ async function trocarAba(aba) {
     const btnAtivo = document.getElementById('nav-' + aba);
     if(btnAtivo) btnAtivo.className = "nav-btn text-emerald-500";
 
-    if (aba === 'registrar') {
-        const t = document.querySelector('#scanner-section h2');
-        if(t) t.textContent = "Registrar Preço";
-    }
+    if (aba === 'registrar') { const t = document.querySelector('#scanner-section h2'); if(t) t.textContent = "Registrar Preço"; }
     if (aba === 'catalogo') carregarCatalogo();
+    
+    // Auto-scroll chat
+    if(aba === 'chat') {
+        const chatArea = document.getElementById('chat-messages');
+        setTimeout(() => chatArea.scrollTop = chatArea.scrollHeight, 100);
+    }
 }
 
-// --- SISTEMAS (NOTIFICAÇÃO, IMAGEM, SCANNER) ---
-function mostrarNotificacao(msg, tipo = 'sucesso') {
-    const t = document.getElementById('toast-notification');
-    const m = document.getElementById('toast-message');
-    if(!t) return;
-    m.textContent = msg;
-    t.className = tipo === 'erro' 
-        ? "fixed top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-5 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-300 w-max max-w-[90%]"
-        : "fixed top-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-5 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-300 w-max max-w-[90%]";
-    t.classList.remove('-translate-y-32', 'opacity-0');
-    setTimeout(() => t.classList.add('-translate-y-32', 'opacity-0'), 3000);
-}
-
-function comprimirImagem(file) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (e) => {
-            const img = new Image();
-            img.src = e.target.result;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const maxWidth = 800; 
-                const scale = maxWidth / img.width;
-                canvas.width = maxWidth;
-                canvas.height = img.height * scale;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', 0.6));
-            };
-        };
-    });
-}
-
-// --- CATÁLOGO & BUSCA (ATUALIZADOS COM BOTÃO +) ---
+// --- CATÁLOGO ---
 async function carregarCatalogo() {
     const lista = document.getElementById('lista-catalogo');
     const select = document.getElementById('filtro-mercado-catalogo');
     if(!lista) return;
-    lista.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p>Carregando...</p></div>`;
+    lista.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p>Buscando...</p></div>`;
 
     try {
         const res = await fetch(`${APPS_SCRIPT_URL}?acao=listarCatalogo`, { redirect: 'follow' });
         const data = await res.json();
-        
         if (data.catalogo && data.catalogo.length > 0) {
             catalogoDados = data.catalogo;
             atualizarListaCatalogo(catalogoDados);
-            if(select) {
-                select.innerHTML = '<option value="todos">Todos</option>';
+            if(select && select.options.length <= 1) {
                 [...new Set(catalogoDados.map(i => i.mercado))].forEach(m => {
                     const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt);
                 });
@@ -208,7 +165,8 @@ function atualizarListaCatalogo(dados) {
     dados.forEach(item => {
         const img = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
         const div = document.createElement('div');
-        div.className = "bg-slate-800 border border-slate-700 p-3 rounded-xl flex gap-3 items-center shadow-sm";
+        div.className = "bg-slate-800 border border-slate-700 p-3 rounded-xl flex gap-3 items-center shadow-sm mb-3";
+        // AQUI ESTÁ O BOTÃO DE ADICIONAR (CORRIGIDO) 👇
         div.innerHTML = `
             <div class="w-12 h-12 bg-white/5 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div>
             <div class="flex-1 min-w-0">
@@ -218,7 +176,7 @@ function atualizarListaCatalogo(dados) {
                     <span class="text-[9px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded truncate max-w-[80px]">${item.mercado}</span>
                 </div>
             </div>
-            <button onclick="adicionarAoCarrinho('${item.produto}', ${item.preco}, '${item.mercado}')" class="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors">
+            <button onclick="adicionarAoCarrinho('${item.produto.replace(/'/g, "\\'")}', ${item.preco}, '${item.mercado.replace(/'/g, "\\'")}')" class="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors">
                 <i class="fas fa-plus"></i>
             </button>
         `;
@@ -226,12 +184,11 @@ function atualizarListaCatalogo(dados) {
     });
 }
 
-// --- LÓGICA DE BUSCA ---
+// --- BUSCA ---
 async function pesquisarPrecos() {
     const busca = document.getElementById('ean-busca').value;
     const container = document.getElementById('resultados-consulta');
     const btn = document.getElementById('btn-pesquisar');
-    
     if (!busca) return mostrarNotificacao("Digite algo!", "erro");
     
     const iconOriginal = btn.innerHTML;
@@ -243,14 +200,9 @@ async function pesquisarPrecos() {
         const data = await res.json();
         btn.innerHTML = iconOriginal;
         
-        if (!data.resultados || data.resultados.length === 0) { 
-            container.innerHTML = `<div class="text-center py-8 opacity-50 bg-slate-800 rounded-xl"><p>Não achei nada.</p></div>`; 
-            return; 
-        }
+        if (!data.resultados || data.resultados.length === 0) { container.innerHTML = `<div class="text-center py-8 opacity-50 bg-slate-800 rounded-xl"><p>Não achei nada.</p></div>`; return; }
         
         const lista = data.resultados.sort((a, b) => a.preco - b.preco);
-        
-        // Cabeçalho do Resultado
         const h = document.createElement('div');
         h.className = "mb-4 bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20";
         h.innerHTML = `<h3 class="text-sm font-bold text-emerald-400">Resultados para "${busca}"</h3>`;
@@ -259,19 +211,18 @@ async function pesquisarPrecos() {
         lista.forEach((item, index) => {
             const eMaisBarato = index === 0;
             const img = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
-            
             const card = document.createElement('div');
             card.className = `p-4 rounded-2xl mb-3 relative overflow-hidden flex gap-3 ${eMaisBarato ? 'bg-gradient-to-br from-emerald-900 to-slate-800 border border-emerald-500 shadow-lg' : 'bg-slate-800 border border-slate-700'}`;
-            
+            // AQUI ESTÁ O BOTÃO DE ADICIONAR (CORRIGIDO) 👇
             card.innerHTML = `
                 <div class="w-14 h-14 bg-white/5 rounded-xl p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div>
-                <div class="flex-1 relative z-10">
-                    ${eMaisBarato ? `<span class="bg-emerald-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase absolute -top-1 right-0">Melhor Preço</span>` : ''}
+                <div class="flex-1 relative z-10 min-w-0">
+                    ${eMaisBarato ? `<span class="bg-emerald-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase absolute -top-1 right-0">Só o Ouro</span>` : ''}
                     <h3 class="text-xl font-black ${eMaisBarato ? 'text-emerald-400' : 'text-white'}">R$ ${item.preco.toFixed(2).replace('.', ',')}</h3>
-                    <p class="font-bold text-[10px] uppercase text-slate-300 line-clamp-1">${item.mercado}</p>
-                    <p class="text-[9px] text-slate-500 mt-1">Enviado por ${item.usuario || 'Anônimo'} em ${new Date(item.data).toLocaleDateString()}</p>
+                    <p class="font-bold text-xs uppercase text-slate-300 truncate">${item.mercado}</p>
+                    <p class="text-[9px] text-slate-500 mt-1 truncate">${item.produto}</p>
                 </div>
-                <button onclick="adicionarAoCarrinho('${item.produto}', ${item.preco}, '${item.mercado}')" class="self-center w-10 h-10 rounded-full bg-slate-700 hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center justify-center transition-colors shadow-lg">
+                <button onclick="adicionarAoCarrinho('${item.produto.replace(/'/g, "\\'")}', ${item.preco}, '${item.mercado.replace(/'/g, "\\'")}')" class="self-center w-10 h-10 rounded-full bg-slate-700 hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center justify-center transition-colors shadow-lg z-20">
                     <i class="fas fa-cart-plus"></i>
                 </button>
             `;
@@ -289,9 +240,8 @@ async function enviarMensagemGemini() {
     
     area.innerHTML += `<div class="chat-user text-sm mb-2">${txt}</div>`;
     input.value = '';
-    area.scrollTop = area.scrollHeight; // Auto scroll
+    area.scrollTop = area.scrollHeight;
     
-    // Loading falso
     const id = 'load-' + Date.now();
     area.innerHTML += `<div id="${id}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Digitando...</div>`;
     area.scrollTop = area.scrollHeight;
@@ -300,7 +250,6 @@ async function enviarMensagemGemini() {
         const res = await fetch(`${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(txt)}`, { redirect: 'follow' });
         const data = await res.json();
         document.getElementById(id).remove();
-        
         if (data.resposta) {
             const r = data.resposta.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
             area.innerHTML += `<div class="chat-ai text-sm mb-2">${r}</div>`;
@@ -314,107 +263,54 @@ async function enviarMensagemGemini() {
     area.scrollTop = area.scrollHeight;
 }
 
-// --- SCANNER & INIT ---
+// --- UTILITÁRIOS (Toast, Camera, Etc) ---
+function mostrarNotificacao(msg, tipo = 'sucesso') {
+    const t = document.getElementById('toast-notification');
+    const m = document.getElementById('toast-message');
+    if(!t) return;
+    m.textContent = msg;
+    t.className = tipo === 'erro' 
+        ? "fixed top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-5 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-300 w-max max-w-[90%]"
+        : "fixed top-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-5 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-300 w-max max-w-[90%]";
+    t.classList.remove('-translate-y-32', 'opacity-0');
+    setTimeout(() => t.classList.add('-translate-y-32', 'opacity-0'), 3000);
+}
+function comprimirImagem(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader(); reader.readAsDataURL(file);
+        reader.onload = (e) => {
+            const img = new Image(); img.src = e.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                const scale = 800 / img.width; canvas.width = 800; canvas.height = img.height * scale;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.6));
+            };
+        };
+    });
+}
 async function iniciarCamera(modo) {
     if (scannerIsRunning) return;
     if (modo === 'pesquisar') {
-        trocarAba('registrar'); // Reusa a aba de registro para escanear
-        document.querySelector('#scanner-section h2').textContent = "Escanear para Pesquisar";
-        // Override function success temporariamente
+        trocarAba('registrar'); document.querySelector('#scanner-section h2').textContent = "Escanear";
         const originalSuccess = onScanSuccess;
         onScanSuccess = async (t) => {
-            html5QrCode.stop().then(() => { 
-                document.getElementById('reader').innerHTML = ''; scannerIsRunning = false; 
-                trocarAba('consultar');
-                document.getElementById('ean-busca').value = t;
-                pesquisarPrecos();
-                onScanSuccess = originalSuccess; // Restaura
-            });
+            html5QrCode.stop().then(() => { document.getElementById('reader').innerHTML = ''; scannerIsRunning = false; trocarAba('consultar'); document.getElementById('ean-busca').value = t; pesquisarPrecos(); onScanSuccess = originalSuccess; });
         };
     }
     try {
         if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-        scannerIsRunning = true;
-        await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess);
+        scannerIsRunning = true; await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess);
         document.getElementById('start-scan-btn').classList.add('hidden');
-    } catch (err) {
-        scannerIsRunning = false;
-        mostrarNotificacao("Erro na câmera", "erro");
-        document.getElementById('start-scan-btn').classList.remove('hidden');
-    }
+    } catch (err) { scannerIsRunning = false; mostrarNotificacao("Erro câmera", "erro"); document.getElementById('start-scan-btn').classList.remove('hidden'); }
 }
-
-async function onScanSuccess(decodedText) {
-    if (html5QrCode) {
-        html5QrCode.stop().then(() => { document.getElementById('reader').innerHTML = ''; scannerIsRunning = false; }).catch(() => scannerIsRunning = false);
-    }
-    document.getElementById('start-scan-btn').classList.remove('hidden');
-    
-    // Modo Registro
-    document.getElementById('scanner-section').classList.add('hidden');
-    document.getElementById('price-form-section').classList.remove('hidden');
-    document.getElementById('ean-field').value = decodedText;
-    document.getElementById('product-name').value = "Buscando...";
-    
-    try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?ean=${decodedText}`, { redirect: 'follow' });
-        const data = await res.json();
-        document.getElementById('product-name').value = data.nome || "";
-        if(data.imagem && data.imagem.startsWith('http')) {
-            document.getElementById('image-url-field').value = data.imagem;
-            document.getElementById('preview-imagem').src = data.imagem;
-            document.getElementById('preview-imagem').classList.remove('hidden');
-            document.getElementById('btn-camera-foto').classList.add('hidden');
-        }
-    } catch(e) { document.getElementById('product-name').value = ""; }
+async function onScanSuccess(t) {
+    if (html5QrCode) html5QrCode.stop().then(() => { document.getElementById('reader').innerHTML = ''; scannerIsRunning = false; }).catch(() => scannerIsRunning = false);
+    document.getElementById('start-scan-btn').classList.remove('hidden'); document.getElementById('scanner-section').classList.add('hidden'); document.getElementById('price-form-section').classList.remove('hidden'); document.getElementById('ean-field').value = t; document.getElementById('product-name').value = "Buscando...";
+    try { const res = await fetch(`${APPS_SCRIPT_URL}?ean=${t}`, { redirect: 'follow' }); const data = await res.json(); document.getElementById('product-name').value = data.nome || ""; if(data.imagem && data.imagem.startsWith('http')) { document.getElementById('image-url-field').value = data.imagem; document.getElementById('preview-imagem').src = data.imagem; document.getElementById('preview-imagem').classList.remove('hidden'); document.getElementById('btn-camera-foto').classList.add('hidden'); } } catch(e) { document.getElementById('product-name').value = ""; }
 }
-
-async function salvarPreco(e) {
-    e.preventDefault(); 
-    const btn = e.target.querySelector('button[type="submit"]'); 
-    const txt = btn.innerHTML; 
-    btn.innerHTML = '...'; btn.disabled = true;
-    
-    const payload = { 
-        ean: document.getElementById('ean-field').value, 
-        produto: document.getElementById('product-name').value, 
-        preco: document.getElementById('price').value, 
-        mercado: document.getElementById('market').value, 
-        usuario: document.getElementById('username').value, 
-        imagem: document.getElementById('image-url-field').value 
-    };
-    
-    try { 
-        await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
-        mostrarNotificacao("Salvo com sucesso!"); 
-        setTimeout(() => location.reload(), 1500); 
-    } catch (err) { 
-        mostrarNotificacao("Erro ao salvar", "erro"); 
-        btn.innerHTML = txt; btn.disabled = false; 
-    }
-}
-
-// Init
+async function salvarPreco(e) { e.preventDefault(); const btn = e.target.querySelector('button[type="submit"]'); const txt = btn.innerHTML; btn.innerHTML = '...'; btn.disabled = true; const payload = { ean: document.getElementById('ean-field').value, produto: document.getElementById('product-name').value, preco: document.getElementById('price').value, mercado: document.getElementById('market').value, usuario: document.getElementById('username').value, imagem: document.getElementById('image-url-field').value }; try { await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); mostrarNotificacao("Salvo!"); setTimeout(() => location.reload(), 1500); } catch (err) { mostrarNotificacao("Erro", "erro"); btn.innerHTML = txt; btn.disabled = false; } }
 document.addEventListener('DOMContentLoaded', () => {
     atualizarContadorCarrinho();
-    
-    const f = document.getElementById('filtro-mercado-catalogo');
-    if(f) f.addEventListener('change', () => {
-        const v = f.value;
-        if(v === 'todos') atualizarListaCatalogo(catalogoDados);
-        else atualizarListaCatalogo(catalogoDados.filter(i => i.mercado === v));
-    });
-
-    // Load initial data
-    (async () => {
-        try { 
-            const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); 
-            const d = await res.json();
-            const s = document.getElementById('market');
-            if(d.mercados && s) {
-                s.innerHTML = '';
-                d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); });
-            }
-        } catch(e) {}
-    })();
+    const f = document.getElementById('filtro-mercado-catalogo'); if(f) f.addEventListener('change', () => { const v = f.value; if(v === 'todos') atualizarListaCatalogo(catalogoDados); else atualizarListaCatalogo(catalogoDados.filter(i => i.mercado === v)); });
+    (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
 });
