@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Radar de Preços | WillWeb</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
@@ -15,19 +14,18 @@
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* Scanner Style */
         #reader { border-radius: 1rem; overflow: hidden; border: 2px solid #334155; position: relative; }
         #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
         
-        /* Loaders e Animações */
         .loader { width: 24px; height: 24px; border: 3px solid #FFF; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
         @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Ajuste do Menu */
         .nav-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.5rem 0; transition: color 0.3s; }
-        
-        /* Esconder elementos padrão da biblioteca de QR */
         div[data-html5-qrcode-id="html5-qrcode-button-camera-start"], div[data-html5-qrcode-id="html5-qrcode-select-camera"] { display: none !important; }
+        
+        /* Chat Bubble Styles */
+        .chat-user { background: #4F46E5; color: white; border-radius: 12px 12px 0 12px; padding: 10px; margin-left: auto; max-width: 80%; }
+        .chat-ai { background: #1E293B; color: #E2E8F0; border-radius: 12px 12px 12px 0; padding: 10px; margin-right: auto; max-width: 80%; border: 1px solid #334155; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen pb-28">
@@ -36,11 +34,11 @@
         <div class="max-w-md mx-auto flex justify-between items-center p-4">
             <div class="flex items-center gap-2">
                 <i class="fas fa-bolt text-yellow-500"></i>
-                <h1 class="text-lg font-black tracking-tight text-white">RADAR<span class="text-yellow-500">PREÇO</span></h1>
+                <h1 class="text-lg font-black tracking-tight text-white">RADAR<span class="text-yellow-500">AI</span></h1>
             </div>
             <div class="flex items-center gap-3">
                 <div id="cart-counter" class="hidden bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">0</div>
-                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-mono">v6.4</span>
+                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-mono">v7.0</span>
             </div>
         </div>
     </header>
@@ -74,8 +72,7 @@
                     <div class="flex justify-center mb-4 relative">
                         <img id="preview-imagem" src="" class="w-24 h-24 object-contain rounded-lg bg-white p-1 hidden border border-slate-700">
                         <div id="btn-camera-foto" class="w-24 h-24 bg-slate-800 border-2 border-dashed border-slate-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all hidden">
-                            <i class="fas fa-camera text-slate-400 text-2xl mb-1"></i>
-                            <span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>
+                            <i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>
                         </div>
                         <input type="file" id="input-foto-produto" capture="environment" accept="image/*" class="hidden">
                     </div>
@@ -112,41 +109,56 @@
             </div>
         </div>
 
-        <div id="carrinho-container" class="hidden fade-in px-1">
-            <div class="text-center mb-6 space-y-1">
-                <h2 class="text-2xl font-bold text-white">Lista Inteligente</h2>
-                <p class="text-slate-400 text-sm">Comparador de Economia</p>
+        <div id="catalogo-container" class="hidden fade-in px-1">
+             <div class="text-center mb-4 space-y-1">
+                <h2 class="text-2xl font-bold text-white">Catálogo</h2>
+                <p class="text-slate-400 text-sm">Todos os produtos registrados</p>
             </div>
-            <div id="lista-itens-carrinho" class="space-y-2 mb-8">
-                <div class="text-center py-10 opacity-30"><i class="fas fa-cart-shopping text-6xl mb-4"></i><p class="text-sm">Sua lista está vazia.</p></div>
-            </div>
-            <button id="btn-calcular-carrinho" class="hidden w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 py-4 rounded-xl font-bold text-white shadow-lg mb-8">
-                <i class="fas fa-calculator mr-2"></i> Calcular
-            </button>
-            <div id="resultado-comparacao" class="space-y-6 hidden pb-24">
-                <div class="bg-slate-900 border border-emerald-500/30 p-5 rounded-2xl relative overflow-hidden">
-                    <div class="absolute -right-6 -top-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-xl"></div>
-                    <p class="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">Melhor Cenário</p>
-                    <h3 class="text-3xl font-black text-white" id="total-otimizado">R$ 0,00</h3>
+            
+            <div class="mb-4">
+                <div class="relative">
+                    <i class="fas fa-filter absolute left-4 top-3.5 text-slate-500 text-xs"></i>
+                    <select id="filtro-mercado-catalogo" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 pl-10 text-white appearance-none outline-none text-sm font-bold">
+                        <option value="todos">Todos os Mercados</option>
+                    </select>
                 </div>
-                <div>
-                    <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2"><i class="fas fa-store"></i> Por Mercado:</h3>
-                    <div id="ranking-mercados" class="space-y-3"></div>
+            </div>
+
+            <div id="lista-catalogo" class="space-y-3 pb-20">
+                 <div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p class="text-sm mt-2">Carregando catálogo...</p></div>
+            </div>
+        </div>
+
+        <div id="chat-container" class="hidden fade-in px-1 h-full flex flex-col">
+            <div class="text-center mb-4 space-y-1">
+                <h2 class="text-2xl font-bold text-white">Radar AI <span class="text-[10px] bg-purple-600 px-2 rounded-full align-middle">BETA</span></h2>
+                <p class="text-slate-400 text-sm">Pergunte sobre os preços</p>
+            </div>
+            
+            <div id="chat-messages" class="flex-1 bg-slate-900/50 rounded-2xl p-4 overflow-y-auto space-y-4 mb-20 border border-slate-800 min-h-[50vh] max-h-[60vh]">
+                <div class="chat-ai text-sm">
+                    Olá! Sou a IA do Radar. Posso montar listas ou achar o produto mais barato pra você. O que precisa? 🤖
+                </div>
+            </div>
+
+            <div class="fixed bottom-24 left-0 w-full px-4 max-w-md mx-auto z-10">
+                <div class="flex gap-2">
+                    <input type="text" id="chat-input" class="flex-1 bg-slate-800 border border-slate-700 text-white rounded-xl p-4 shadow-xl outline-none" placeholder="Ex: Onde tem açúcar barato?">
+                    <button id="btn-enviar-chat" class="bg-purple-600 text-white p-4 rounded-xl shadow-xl font-bold"><i class="fas fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
 
     </main>
 
-    <div id="toast-notification" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-500 -translate-y-32 opacity-0 border border-white/10 backdrop-blur-md pointer-events-none w-max max-w-[90%]">
-        <i id="toast-icon" class="fas fa-check-circle text-xl"></i><span id="toast-message">Sucesso!</span>
-    </div>
+    <div id="toast-notification" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-500 -translate-y-32 opacity-0 border border-white/10 backdrop-blur-md pointer-events-none w-max max-w-[90%]"><i id="toast-icon" class="fas fa-check-circle text-xl"></i><span id="toast-message">Sucesso!</span></div>
 
     <nav class="fixed bottom-0 left-0 w-full bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-2 pb-5 z-50">
-        <div class="flex justify-around items-center max-w-md mx-auto">
-            <button id="nav-registrar" class="nav-btn group text-blue-400 w-full"><div class="mb-1"><i class="fas fa-plus-circle text-2xl"></i></div><span class="text-[9px] font-bold uppercase tracking-widest opacity-80">Registrar</span></button>
-            <button id="nav-consultar" class="nav-btn group text-slate-500 w-full"><div class="mb-1"><i class="fas fa-search text-2xl"></i></div><span class="text-[9px] font-bold uppercase tracking-widest opacity-80">Consultar</span></button>
-            <button id="nav-carrinho" class="nav-btn group text-slate-500 w-full relative"><div class="mb-1"><i class="fas fa-cart-shopping text-2xl"></i></div><span class="text-[9px] font-bold uppercase tracking-widest opacity-80">Lista</span></button>
+        <div class="grid grid-cols-4 gap-1 max-w-md mx-auto">
+            <button id="nav-registrar" class="nav-btn group text-blue-400"><div class="mb-1"><i class="fas fa-plus-circle text-xl"></i></div><span class="text-[9px] font-bold uppercase opacity-80">Registrar</span></button>
+            <button id="nav-consultar" class="nav-btn group text-slate-500"><div class="mb-1"><i class="fas fa-search text-xl"></i></div><span class="text-[9px] font-bold uppercase opacity-80">Buscar</span></button>
+            <button id="nav-catalogo" class="nav-btn group text-slate-500"><div class="mb-1"><i class="fas fa-list text-xl"></i></div><span class="text-[9px] font-bold uppercase opacity-80">Catálogo</span></button>
+            <button id="nav-chat" class="nav-btn group text-slate-500"><div class="mb-1"><i class="fas fa-robot text-xl"></i></div><span class="text-[9px] font-bold uppercase opacity-80">IA Chat</span></button>
         </div>
     </nav>
 
