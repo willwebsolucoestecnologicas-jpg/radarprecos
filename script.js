@@ -48,38 +48,45 @@ function comprimirImagem(file) {
     });
 }
 
-// --- NAVEGAÇÃO ---
+// --- NAVEGAÇÃO VERDE DO KALANGO ---
 async function trocarAba(aba) {
     const abas = ['registrar', 'consultar', 'catalogo', 'chat'];
+    
+    // Esconde todos os containers
     abas.forEach(a => {
         const container = document.getElementById(a + '-container');
         if(container) container.classList.add('hidden');
     });
     
-    ['registrar', 'consultar', 'catalogo', 'chat'].forEach(id => {
+    // Reseta todos os botões para cinza
+    abas.forEach(id => {
         const btn = document.getElementById('nav-' + id);
-        if(btn) btn.className = "nav-btn text-slate-500";
+        if(btn) btn.className = "nav-btn text-slate-500 hover:text-emerald-400"; // Cinza padrão
     });
 
+    // Para a câmera se estiver rodando
     if (scannerIsRunning && html5QrCode) {
         try { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; } catch(e){}
     }
 
+    // Mostra o container ativo
     const containerAtivo = document.getElementById(aba + '-container');
     if(containerAtivo) containerAtivo.classList.remove('hidden');
     
+    // Ativa o botão com a cor VERDE ESMERALDA (Identidade do Kalango)
+    const btnAtivo = document.getElementById('nav-' + aba);
+    if(btnAtivo) {
+        // Agora todos ficam verdes quando ativos, pra fortalecer a marca
+        btnAtivo.className = "nav-btn text-emerald-500"; 
+    }
+
+    // Ações específicas de cada aba
     if (aba === 'registrar') {
-        document.getElementById('nav-registrar').className = "nav-btn text-blue-400";
         const titulo = document.querySelector('#scanner-section h2');
         if(titulo) titulo.textContent = "Registrar";
     }
-    if (aba === 'consultar') document.getElementById('nav-consultar').className = "nav-btn text-yellow-400";
     if (aba === 'catalogo') {
-        document.getElementById('nav-catalogo').className = "nav-btn text-emerald-400";
         carregarCatalogo();
-    }
-    if (aba === 'chat') {
-        document.getElementById('nav-chat').className = "nav-btn text-purple-500";
     }
 }
 
@@ -384,4 +391,5 @@ document.addEventListener('DOMContentLoaded', () => {
     if(user && document.getElementById('username')) document.getElementById('username').value = user; 
     if(document.getElementById('username')) document.getElementById('username').addEventListener('input', (e) => localStorage.setItem('radar_user', e.target.value));
 });
+
 
