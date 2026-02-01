@@ -1,11 +1,28 @@
-// script.js - v7.0 (CATÁLOGO + GEMINI AI)
+// script.js - v7.2 (DEBUGGER E CHAT GET)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
 
 let html5QrCode;
 let scannerIsRunning = false;
-let catalogoDados = []; // Armazena o catálogo localmente para filtrar rápido
+let catalogoDados = [];
 
-// --- UTILITÁRIOS ---
+// --- FUNÇÃO DE DIAGNÓSTICO (NOVO) ---
+async function verificarVersaoBackend() {
+    try {
+        const res = await fetch(APPS_SCRIPT_URL, { redirect: 'follow' });
+        const data = await res.json();
+        console.log("Status Backend:", data);
+        
+        if (data.versao === "7.2") {
+            mostrarNotificacao("Sistema Conectado v7.2 ✅");
+        } else {
+            mostrarNotificacao("⚠️ VERSÃO ANTIGA DETECTADA! Faça nova implantação.", "erro");
+        }
+    } catch (e) {
+        console.error(e);
+        // Não mostra erro fatal aqui para não assustar, mas loga no console
+    }
+}
+
 function mostrarNotificacao(mensagem, tipo = 'sucesso') {
     const toast = document.getElementById('toast-notification');
     const toastMsg = document.getElementById('toast-message');
@@ -19,9 +36,10 @@ function mostrarNotificacao(mensagem, tipo = 'sucesso') {
         toastIcon.className = 'fas fa-circle-check text-xl';
     }
     toast.classList.remove('-translate-y-32', 'opacity-0');
-    setTimeout(() => toast.classList.add('-translate-y-32', 'opacity-0'), 3000);
+    setTimeout(() => toast.classList.add('-translate-y-32', 'opacity-0'), 4000);
 }
 
+// ... (MANTER FUNÇÃO comprimirImagem IGUAL) ...
 function comprimirImagem(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -48,7 +66,6 @@ async function trocarAba(aba) {
     const abas = ['registrar', 'consultar', 'catalogo', 'chat'];
     abas.forEach(a => document.getElementById(a + '-container').classList.add('hidden'));
     
-    // Reseta cores
     ['registrar', 'consultar', 'catalogo', 'chat'].forEach(id => {
         document.getElementById('nav-' + id).className = "nav-btn text-slate-500";
     });
@@ -64,34 +81,32 @@ async function trocarAba(aba) {
         document.querySelector('#scanner-section h2').textContent = "Registrar";
     }
     if (aba === 'consultar') document.getElementById('nav-consultar').className = "nav-btn text-yellow-400";
-    
     if (aba === 'catalogo') {
         document.getElementById('nav-catalogo').className = "nav-btn text-emerald-400";
         carregarCatalogo();
     }
-    
     if (aba === 'chat') {
         document.getElementById('nav-chat').className = "nav-btn text-purple-500";
     }
 }
 
-// --- LÓGICA DO CATÁLOGO ---
+// --- CATÁLOGO ---
 async function carregarCatalogo() {
     const lista = document.getElementById('lista-catalogo');
     const selectFiltro = document.getElementById('filtro-mercado-catalogo');
     
-    // Se já carregou, não carrega de novo (cache simples)
-    if (catalogoDados.length > 0) return;
+    lista.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p class="text-sm mt-2">Buscando dados v7.2...</p></div>`;
 
     try {
         const res = await fetch(`${APPS_SCRIPT_URL}?acao=listarCatalogo`, { redirect: 'follow' });
         const data = await res.json();
         
-        if (data.catalogo) {
+        if (data.catalogo && data.catalogo.length > 0) {
             catalogoDados = data.catalogo;
             atualizarListaCatalogo(catalogoDados);
             
-            // Popula filtro de mercados
+            // Limpa e popula filtro
+            selectFiltro.innerHTML = '<option value="todos">Todos os Mercados</option>';
             const mercados = [...new Set(catalogoDados.map(item => item.mercado))];
             mercados.forEach(m => {
                 const opt = document.createElement('option');
@@ -99,9 +114,11 @@ async function carregarCatalogo() {
                 opt.textContent = m;
                 selectFiltro.appendChild(opt);
             });
+        } else {
+            lista.innerHTML = `<div class="text-center py-10 opacity-30"><p>Nenhum produto cadastrado ainda.</p><p class="text-xs">Registre algo primeiro!</p></div>`;
         }
     } catch (e) {
-        lista.innerHTML = `<div class="text-center py-10 opacity-50"><p>Erro ao carregar.</p></div>`;
+        lista.innerHTML = `<div class="text-center py-10 opacity-50"><p>Erro ao carregar.</p><p class="text-xs text-red-400">${e.message}</p></div>`;
     }
 }
 
@@ -109,11 +126,6 @@ function atualizarListaCatalogo(dados) {
     const lista = document.getElementById('lista-catalogo');
     lista.innerHTML = '';
     
-    if (dados.length === 0) {
-        lista.innerHTML = `<div class="text-center py-10 opacity-30"><p>Nenhum produto encontrado.</p></div>`;
-        return;
-    }
-
     dados.forEach(item => {
         const imgUrl = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
         
@@ -143,8 +155,7 @@ function filtrarCatalogo() {
     }
 }
 
-// --- LÓGICA DO CHAT GEMINI ---
-// --- LÓGICA DO CHAT GEMINI (CORRIGIDA v7.1) ---
+// --- CHAT GEMINI (COM TRATAMENTO DE ERRO) ---
 async function enviarMensagemGemini() {
     const input = document.getElementById('chat-input');
     const area = document.getElementById('chat-messages');
@@ -152,51 +163,40 @@ async function enviarMensagemGemini() {
     
     if (!texto) return;
     
-    // Mostra mensagem do usuário
     area.innerHTML += `<div class="chat-user text-sm mb-2">${texto}</div>`;
     input.value = '';
     area.scrollTop = area.scrollHeight;
     
-    // Loading
     const loadingId = 'loading-' + Date.now();
-    area.innerHTML += `<div id="${loadingId}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Pensando...</div>`;
+    area.innerHTML += `<div id="${loadingId}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Conectando...</div>`;
     area.scrollTop = area.scrollHeight;
     
     try {
-        // AGORA VIA GET (Leitura permitida)
-        // EncodeURIComponent é vital para textos com acentos/espaços
         const url = `${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(texto)}`;
-        
         const res = await fetch(url, { redirect: 'follow' });
         const data = await res.json();
         
         document.getElementById(loadingId).remove();
         
-        // Mostra resposta da IA
         if (data.resposta) {
-            // Converte quebras de linha em HTML para ficar bonito
-            const respostaFormatada = data.resposta.replace(/\n/g, '<br>');
-            area.innerHTML += `<div class="chat-ai text-sm mb-2">${respostaFormatada}</div>`;
+            // Se a resposta começar com ❌, pinta de vermelho
+            const cor = data.resposta.startsWith('❌') ? 'text-red-400' : 'text-slate-200';
+            const respFormatada = data.resposta.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>'); // Negrito markdown
+            area.innerHTML += `<div class="chat-ai text-sm mb-2 ${cor}">${respFormatada}</div>`;
         } else {
-            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Sem resposta.</div>`;
+            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">Resposta vazia do servidor.</div>`;
         }
 
     } catch (e) {
         document.getElementById(loadingId).remove();
-        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Erro de conexão. Tente novamente.</div>`;
+        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Falha na rede. Verifique sua conexão.</div>`;
     }
     area.scrollTop = area.scrollHeight;
 }
-// --- AJUSTE CRÍTICO NO CHAT (USAR GET PARA LER RESPOSTA) ---
-// Para funcionar de verdade, substitua a função `processarChatGemini` no code.gs para ser acessível via GET também.
-// No código que te mandei acima, o chat está no POST.
-// Para fins deste teste, o chat vai enviar mas pode não mostrar a resposta.
-// SE QUISER VER A RESPOSTA: Mude a chamada fetch acima para usar um parâmetro GET.
-// Mas vamos deixar assim por enquanto para não complicar.
 
+// ... (RESTANTE DO CÓDIGO - Scanner, etc - MANTER IGUAL AO v7.0) ...
+// (Estou resumindo aqui, mas você deve manter as funções iniciarCamera, onScanSuccess, pesquisarPrecos, salvarPreco, loadMarkets)
 
-// --- RESTO DAS FUNÇÕES (SCANNER, PESQUISA, SALVAR) ---
-// (São idênticas à v6.4 - Copiar do arquivo anterior ou manter as que já funcionam)
 async function iniciarCamera(modo) {
     if (scannerIsRunning) return;
     const msg = document.getElementById('scan-message');
@@ -285,7 +285,7 @@ async function pesquisarPrecos() {
         const btnAdd = document.createElement('button');
         btnAdd.className = "bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg shadow-lg active:scale-95 transition-all font-bold text-xs flex items-center gap-2";
         btnAdd.innerHTML = '<i class="fas fa-plus"></i> Adicionar';
-        btnAdd.addEventListener('click', () => adicionarAoCarrinho(eanBusca, nomeProdutoGeral)); // Correção da função faltante
+        btnAdd.addEventListener('click', () => adicionarAoCarrinho(eanBusca, nomeProdutoGeral)); 
         headerDiv.appendChild(btnAdd);
         container.appendChild(headerDiv);
         lista.forEach((item, index) => {
@@ -306,7 +306,6 @@ async function salvarPreco(e) {
 }
 
 function adicionarAoCarrinho(ean, produto) {
-    // Reimplementado pois estava faltando no bloco anterior
     let carrinho = JSON.parse(localStorage.getItem('radar_carrinho')) || [];
     if (!carrinho.find(item => item.ean === ean)) {
         carrinho.push({ ean, produto });
@@ -317,7 +316,14 @@ function adicionarAoCarrinho(ean, produto) {
     }
 }
 
+async function loadMarkets() {
+    const select = document.getElementById('market');
+    try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const data = await res.json(); if(data.mercados) { select.innerHTML = '<option value="">Selecione...</option>'; data.mercados.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); }); } } catch (e) { select.innerHTML = '<option value="Geral">Mercado Geral</option>'; }
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
+    verificarVersaoBackend(); // CHECK DE VERSÃO
     loadMarkets();
     document.getElementById('nav-registrar').addEventListener('click', () => trocarAba('registrar'));
     document.getElementById('nav-consultar').addEventListener('click', () => trocarAba('consultar'));
@@ -345,10 +351,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const user = localStorage.getItem('radar_user'); if(user) document.getElementById('username').value = user; document.getElementById('username').addEventListener('input', (e) => localStorage.setItem('radar_user', e.target.value));
 });
-
-async function loadMarkets() {
-    const select = document.getElementById('market');
-    try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const data = await res.json(); if(data.mercados) { select.innerHTML = '<option value="">Selecione...</option>'; data.mercados.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); }); } } catch (e) { select.innerHTML = '<option value="Geral">Mercado Geral</option>'; }
-}
-
-
