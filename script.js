@@ -1,32 +1,158 @@
-// script.js - v8.0 (Kalango Edition - Sem Alertas)
+// script.js - v8.3 (Carrinho Restaurado + Chat Fixo)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 let html5QrCode;
 let scannerIsRunning = false;
 let catalogoDados = [];
+let carrinho = JSON.parse(localStorage.getItem('kalango_cart')) || [];
 
-// --- SISTEMA DE NOTIFICAÇÃO (TOAST) ---
-function mostrarNotificacao(mensagem, tipo = 'sucesso') {
-    const toast = document.getElementById('toast-notification');
-    const toastMsg = document.getElementById('toast-message');
-    const toastIcon = document.getElementById('toast-icon');
+// --- CARRINHO / LISTA DE COMPRAS ---
+function toggleCarrinho() {
+    const modal = document.getElementById('cart-modal');
+    const content = document.getElementById('cart-content');
     
-    // Se não existir toast no HTML, cria um dinamicamente (segurança)
-    if (!toast) return console.log(mensagem);
-
-    toastMsg.textContent = mensagem;
-    if (tipo === 'erro') {
-        toast.className = "fixed top-6 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-500 w-max max-w-[90%]";
-        if(toastIcon) toastIcon.className = 'fas fa-circle-xmark text-xl';
+    if (modal.classList.contains('hidden')) {
+        renderizarCarrinho();
+        modal.classList.remove('hidden');
+        setTimeout(() => content.classList.remove('translate-y-full'), 10);
     } else {
-        toast.className = "fixed top-6 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-500 w-max max-w-[90%]";
-        if(toastIcon) toastIcon.className = 'fas fa-circle-check text-xl';
+        content.classList.add('translate-y-full');
+        setTimeout(() => modal.classList.add('hidden'), 300);
     }
-    toast.classList.remove('-translate-y-32', 'opacity-0');
-    setTimeout(() => toast.classList.add('-translate-y-32', 'opacity-0'), 4000);
 }
 
-// --- UTILITÁRIO DE IMAGEM ---
+function atualizarContadorCarrinho() {
+    const count = carrinho.reduce((acc, item) => acc + item.qtd, 0);
+    const badge = document.getElementById('cart-count');
+    if(badge) {
+        badge.textContent = count;
+        badge.classList.toggle('hidden', count === 0);
+    }
+}
+
+function adicionarAoCarrinho(produto, preco, mercado) {
+    const id = produto + mercado; // ID único simples
+    const existente = carrinho.find(i => i.id === id);
+    
+    if (existente) {
+        existente.qtd++;
+    } else {
+        carrinho.push({ id, produto, preco, mercado, qtd: 1 });
+    }
+    
+    salvarCarrinho();
+    mostrarNotificacao(`+1 ${produto} na lista!`);
+    
+    // Efeito visual de pulo no botão
+    const btnCart = document.querySelector('.fixed.bottom-24');
+    if(btnCart) {
+        btnCart.classList.remove('animate-bounce-slow');
+        void btnCart.offsetWidth; // Trigger reflow
+        btnCart.classList.add('animate-bounce-slow');
+    }
+}
+
+function removerDoCarrinho(id) {
+    carrinho = carrinho.filter(i => i.id !== id);
+    salvarCarrinho();
+    renderizarCarrinho();
+}
+
+function limparCarrinho() {
+    if(confirm("Limpar toda a lista?")) {
+        carrinho = [];
+        salvarCarrinho();
+        renderizarCarrinho();
+        toggleCarrinho();
+    }
+}
+
+function salvarCarrinho() {
+    localStorage.setItem('kalango_cart', JSON.stringify(carrinho));
+    atualizarContadorCarrinho();
+}
+
+function renderizarCarrinho() {
+    const container = document.getElementById('cart-items');
+    const totalEl = document.getElementById('cart-total-price');
+    const totalItemsEl = document.getElementById('cart-total-items');
+    
+    if (carrinho.length === 0) {
+        container.innerHTML = `<div class="text-center py-20 opacity-30"><i class="fas fa-basket-shopping text-4xl mb-3"></i><p>Sua lista está vazia.</p></div>`;
+        totalEl.textContent = "R$ 0,00";
+        totalItemsEl.textContent = "0 itens";
+        return;
+    }
+
+    container.innerHTML = '';
+    let total = 0;
+    let qtdTotal = 0;
+
+    carrinho.forEach(item => {
+        total += item.preco * item.qtd;
+        qtdTotal += item.qtd;
+        
+        const div = document.createElement('div');
+        div.className = "flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700";
+        div.innerHTML = `
+            <div>
+                <h4 class="text-sm font-bold text-white">${item.produto}</h4>
+                <p class="text-[10px] text-slate-400">${item.mercado}</p>
+                <p class="text-xs text-emerald-400 font-bold mt-1">${item.qtd}x R$ ${item.preco.toFixed(2)}</p>
+            </div>
+            <button onclick="removerDoCarrinho('${item.id}')" class="text-red-400 hover:text-red-300 p-2">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    });
+
+    totalEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
+    totalItemsEl.textContent = `${qtdTotal} itens na lista`;
+}
+
+// --- NAVEGAÇÃO ---
+async function trocarAba(aba) {
+    const abas = ['registrar', 'consultar', 'catalogo', 'chat'];
+    abas.forEach(a => {
+        const el = document.getElementById(a + '-container');
+        if(el) el.classList.add('hidden');
+    });
+    abas.forEach(id => {
+        const btn = document.getElementById('nav-' + id);
+        if(btn) btn.className = "nav-btn text-slate-500";
+    });
+
+    if (scannerIsRunning && html5QrCode) {
+        try { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; } catch(e){}
+    }
+
+    const ativo = document.getElementById(aba + '-container');
+    if(ativo) ativo.classList.remove('hidden');
+    
+    const btnAtivo = document.getElementById('nav-' + aba);
+    if(btnAtivo) btnAtivo.className = "nav-btn text-emerald-500";
+
+    if (aba === 'registrar') {
+        const t = document.querySelector('#scanner-section h2');
+        if(t) t.textContent = "Registrar Preço";
+    }
+    if (aba === 'catalogo') carregarCatalogo();
+}
+
+// --- SISTEMAS (NOTIFICAÇÃO, IMAGEM, SCANNER) ---
+function mostrarNotificacao(msg, tipo = 'sucesso') {
+    const t = document.getElementById('toast-notification');
+    const m = document.getElementById('toast-message');
+    if(!t) return;
+    m.textContent = msg;
+    t.className = tipo === 'erro' 
+        ? "fixed top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-5 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-300 w-max max-w-[90%]"
+        : "fixed top-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-5 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-300 w-max max-w-[90%]";
+    t.classList.remove('-translate-y-32', 'opacity-0');
+    setTimeout(() => t.classList.add('-translate-y-32', 'opacity-0'), 3000);
+}
+
 function comprimirImagem(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -48,56 +174,12 @@ function comprimirImagem(file) {
     });
 }
 
-// --- NAVEGAÇÃO VERDE DO KALANGO ---
-async function trocarAba(aba) {
-    const abas = ['registrar', 'consultar', 'catalogo', 'chat'];
-    
-    // Esconde todos os containers
-    abas.forEach(a => {
-        const container = document.getElementById(a + '-container');
-        if(container) container.classList.add('hidden');
-    });
-    
-    // Reseta todos os botões para cinza
-    abas.forEach(id => {
-        const btn = document.getElementById('nav-' + id);
-        if(btn) btn.className = "nav-btn text-slate-500 hover:text-emerald-400"; // Cinza padrão
-    });
-
-    // Para a câmera se estiver rodando
-    if (scannerIsRunning && html5QrCode) {
-        try { await html5QrCode.stop(); scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; } catch(e){}
-    }
-
-    // Mostra o container ativo
-    const containerAtivo = document.getElementById(aba + '-container');
-    if(containerAtivo) containerAtivo.classList.remove('hidden');
-    
-    // Ativa o botão com a cor VERDE ESMERALDA (Identidade do Kalango)
-    const btnAtivo = document.getElementById('nav-' + aba);
-    if(btnAtivo) {
-        // Agora todos ficam verdes quando ativos, pra fortalecer a marca
-        btnAtivo.className = "nav-btn text-emerald-500"; 
-    }
-
-    // Ações específicas de cada aba
-    if (aba === 'registrar') {
-        const titulo = document.querySelector('#scanner-section h2');
-        if(titulo) titulo.textContent = "Registrar";
-    }
-    if (aba === 'catalogo') {
-        carregarCatalogo();
-    }
-}
-
-// --- CATÁLOGO ---
+// --- CATÁLOGO & BUSCA (ATUALIZADOS COM BOTÃO +) ---
 async function carregarCatalogo() {
     const lista = document.getElementById('lista-catalogo');
-    const selectFiltro = document.getElementById('filtro-mercado-catalogo');
-    
+    const select = document.getElementById('filtro-mercado-catalogo');
     if(!lista) return;
-
-    lista.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p class="text-sm mt-2">O Kalango tá buscando...</p></div>`;
+    lista.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p>Carregando...</p></div>`;
 
     try {
         const res = await fetch(`${APPS_SCRIPT_URL}?acao=listarCatalogo`, { redirect: 'follow' });
@@ -106,24 +188,16 @@ async function carregarCatalogo() {
         if (data.catalogo && data.catalogo.length > 0) {
             catalogoDados = data.catalogo;
             atualizarListaCatalogo(catalogoDados);
-            
-            // Popula filtro
-            if(selectFiltro) {
-                selectFiltro.innerHTML = '<option value="todos">Todos os Mercados</option>';
-                const mercados = [...new Set(catalogoDados.map(item => item.mercado))];
-                mercados.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m;
-                    opt.textContent = m;
-                    selectFiltro.appendChild(opt);
+            if(select) {
+                select.innerHTML = '<option value="todos">Todos</option>';
+                [...new Set(catalogoDados.map(i => i.mercado))].forEach(m => {
+                    const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt);
                 });
             }
         } else {
-            lista.innerHTML = `<div class="text-center py-10 opacity-30"><p>Nada cadastrado ainda, patrão.</p></div>`;
+            lista.innerHTML = `<div class="text-center py-10 opacity-30"><p>Nada cadastrado.</p></div>`;
         }
-    } catch (e) {
-        lista.innerHTML = `<div class="text-center py-10 opacity-50"><p>Deu zebra na conexão.</p></div>`;
-    }
+    } catch (e) { lista.innerHTML = `<div class="text-center py-10 opacity-50"><p>Erro conexão.</p></div>`; }
 }
 
 function atualizarListaCatalogo(dados) {
@@ -132,264 +206,215 @@ function atualizarListaCatalogo(dados) {
     lista.innerHTML = '';
     
     dados.forEach(item => {
-        const imgUrl = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
-        
+        const img = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
         const div = document.createElement('div');
-        div.className = "bg-slate-900 border border-slate-800 p-3 rounded-xl flex gap-3 items-center";
+        div.className = "bg-slate-800 border border-slate-700 p-3 rounded-xl flex gap-3 items-center shadow-sm";
         div.innerHTML = `
-            <div class="w-12 h-12 bg-white/10 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"><img src="${imgUrl}" class="max-w-full max-h-full object-contain"></div>
-            <div class="flex-1">
-                <h4 class="text-xs font-bold text-white line-clamp-1">${item.produto}</h4>
+            <div class="w-12 h-12 bg-white/5 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div>
+            <div class="flex-1 min-w-0">
+                <h4 class="text-xs font-bold text-white truncate">${item.produto}</h4>
                 <div class="flex justify-between items-center mt-1">
                     <span class="text-emerald-400 font-black text-sm">R$ ${item.preco.toFixed(2).replace('.', ',')}</span>
-                    <span class="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">${item.mercado}</span>
+                    <span class="text-[9px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded truncate max-w-[80px]">${item.mercado}</span>
                 </div>
             </div>
+            <button onclick="adicionarAoCarrinho('${item.produto}', ${item.preco}, '${item.mercado}')" class="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors">
+                <i class="fas fa-plus"></i>
+            </button>
         `;
         lista.appendChild(div);
     });
 }
 
-function filtrarCatalogo() {
-    const filtro = document.getElementById('filtro-mercado-catalogo').value;
-    if (filtro === 'todos') {
-        atualizarListaCatalogo(catalogoDados);
-    } else {
-        const filtrados = catalogoDados.filter(item => item.mercado === filtro);
-        atualizarListaCatalogo(filtrados);
-    }
-}
-
-// --- CHAT KALANGO (ATUALIZADO) ---
-async function enviarMensagemGemini() {
-    const input = document.getElementById('chat-input');
-    const area = document.getElementById('chat-messages');
-    const texto = input.value.trim();
-    
-    if (!texto) return;
-    
-    // Usuário
-    area.innerHTML += `<div class="chat-user text-sm mb-2">${texto}</div>`;
-    input.value = '';
-    area.scrollTop = area.scrollHeight;
-    
-    // Loading
-    const loadingId = 'loading-' + Date.now();
-    area.innerHTML += `<div id="${loadingId}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> O Kalango tá pensando...</div>`;
-    area.scrollTop = area.scrollHeight;
-    
-    try {
-        const url = `${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(texto)}`;
-        const res = await fetch(url, { redirect: 'follow' });
-        const data = await res.json();
-        
-        document.getElementById(loadingId).remove();
-        
-        if (data.resposta) {
-            // Formatação básica
-            const respFormatada = data.resposta.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-            const cor = data.resposta.startsWith('❌') ? 'text-red-400' : 'text-slate-200';
-            area.innerHTML += `<div class="chat-ai text-sm mb-2 ${cor}">${respFormatada}</div>`;
-        } else {
-            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">O Kalango ficou mudo. Tente de novo.</div>`;
-        }
-
-    } catch (e) {
-        if(document.getElementById(loadingId)) document.getElementById(loadingId).remove();
-        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Sem internet, patrão.</div>`;
-    }
-    area.scrollTop = area.scrollHeight;
-}
-
-// --- SCANNER E FUNÇÕES GERAIS ---
-async function iniciarCamera(modo) {
-    if (scannerIsRunning) return;
-    const msg = document.getElementById('scan-message');
-    const tituloScanner = document.querySelector('#scanner-section h2');
-    
-    if(msg) {
-        msg.classList.remove('hidden');
-        msg.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> Iniciando...`;
-    }
-
-    if (modo === 'pesquisar') {
-        document.getElementById('consultar-container').classList.add('hidden');
-        document.getElementById('registrar-container').classList.remove('hidden');
-        document.getElementById('scanner-section').classList.remove('hidden');
-        document.getElementById('price-form-section').classList.add('hidden');
-        document.getElementById('nav-registrar').className = "nav-btn text-slate-500";
-        document.getElementById('nav-consultar').className = "nav-btn text-yellow-400";
-        if(tituloScanner) tituloScanner.textContent = "Pesquisar Código";
-        document.getElementById('start-scan-btn').classList.add('hidden');
-    } else {
-        if(tituloScanner) tituloScanner.textContent = "Registrar";
-    }
-    
-    try {
-        if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-        scannerIsRunning = true;
-        await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, (t) => onScanSuccess(t, modo));
-    } catch (err) {
-        scannerIsRunning = false;
-        mostrarNotificacao("Erro na câmera.", "erro");
-        if(msg) msg.classList.add('hidden');
-        document.getElementById('start-scan-btn').classList.remove('hidden');
-        if (modo === 'pesquisar') trocarAba('consultar');
-    }
-}
-
-async function onScanSuccess(decodedText, modo) {
-    if (html5QrCode) {
-        html5QrCode.stop().then(() => { document.getElementById('reader').innerHTML = ''; scannerIsRunning = false; }).catch(() => scannerIsRunning = false);
-    }
-    if (modo === 'pesquisar') {
-        document.querySelector('#scanner-section h2').textContent = "Registrar";
-        await trocarAba('consultar');
-        document.getElementById('ean-busca').value = decodedText;
-        pesquisarPrecos();
-        return;
-    }
-    document.getElementById('scanner-section').classList.add('hidden');
-    document.getElementById('price-form-section').classList.remove('hidden');
-    document.getElementById('ean-field').value = decodedText;
-    document.getElementById('product-name').value = "Buscando...";
-    document.getElementById('product-name').disabled = true;
-    
-    const imgPreview = document.getElementById('preview-imagem');
-    const btnFoto = document.getElementById('btn-camera-foto');
-    const urlField = document.getElementById('image-url-field');
-    
-    imgPreview.src = ""; imgPreview.classList.add('hidden'); 
-    if(btnFoto) btnFoto.classList.add('hidden'); 
-    urlField.value = "";
-
-    try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?ean=${decodedText}`, { redirect: 'follow' });
-        const data = await res.json();
-        document.getElementById('product-name').value = data.nome || "";
-        if (data.imagem && data.imagem.startsWith('http')) {
-            imgPreview.src = data.imagem; imgPreview.classList.remove('hidden'); btnFoto.classList.add('hidden'); urlField.value = data.imagem;
-        } else {
-            imgPreview.classList.add('hidden'); 
-            if(btnFoto) {
-                btnFoto.classList.remove('hidden');
-                btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>';
-            }
-        }
-    } catch (e) { 
-        document.getElementById('product-name').value = ""; 
-        if(btnFoto) btnFoto.classList.remove('hidden'); 
-    } 
-    finally { document.getElementById('product-name').disabled = false; }
-}
-
+// --- LÓGICA DE BUSCA ---
 async function pesquisarPrecos() {
-    const eanBusca = document.getElementById('ean-busca').value;
+    const busca = document.getElementById('ean-busca').value;
     const container = document.getElementById('resultados-consulta');
     const btn = document.getElementById('btn-pesquisar');
     
-    if (!eanBusca) return mostrarNotificacao("Digite um código!", "erro");
+    if (!busca) return mostrarNotificacao("Digite algo!", "erro");
     
-    const originalIcon = btn.innerHTML;
+    const iconOriginal = btn.innerHTML;
     btn.innerHTML = '<div class="loader w-4 h-4 border-slate-900"></div>'; 
     container.innerHTML = ''; 
     
     try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?acao=consultarPrecos&ean=${eanBusca}`, { redirect: 'follow' });
+        const res = await fetch(`${APPS_SCRIPT_URL}?acao=consultarPrecos&ean=${encodeURIComponent(busca)}`, { redirect: 'follow' });
         const data = await res.json();
-        btn.innerHTML = originalIcon;
+        btn.innerHTML = iconOriginal;
         
         if (!data.resultados || data.resultados.length === 0) { 
-            container.innerHTML = `<div class="text-center py-8 opacity-50 bg-slate-900 rounded-xl"><p>O Kalango não achou esse preço.</p></div>`; 
+            container.innerHTML = `<div class="text-center py-8 opacity-50 bg-slate-800 rounded-xl"><p>Não achei nada.</p></div>`; 
             return; 
         }
         
         const lista = data.resultados.sort((a, b) => a.preco - b.preco);
-        const nomeProdutoGeral = lista[0].produto;
         
-        const headerDiv = document.createElement('div');
-        headerDiv.className = "flex justify-between items-center mb-4 bg-purple-500/10 p-4 rounded-xl border border-purple-500/20";
-        headerDiv.innerHTML = `<div><h3 class="text-sm font-bold text-white line-clamp-1">${nomeProdutoGeral}</h3><p class="text-[10px] text-slate-400">EAN: ${eanBusca}</p></div>`;
-        
-        container.appendChild(headerDiv);
+        // Cabeçalho do Resultado
+        const h = document.createElement('div');
+        h.className = "mb-4 bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20";
+        h.innerHTML = `<h3 class="text-sm font-bold text-emerald-400">Resultados para "${busca}"</h3>`;
+        container.appendChild(h);
         
         lista.forEach((item, index) => {
             const eMaisBarato = index === 0;
-            const imgUrl = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
+            const img = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png";
             
             const card = document.createElement('div');
-            card.className = `p-4 rounded-2xl mb-4 relative overflow-hidden flex gap-4 ${eMaisBarato ? 'bg-gradient-to-br from-yellow-500 to-orange-600 shadow-xl border border-yellow-300 transform scale-[1.02]' : 'bg-slate-800 border border-slate-700'}`;
+            card.className = `p-4 rounded-2xl mb-3 relative overflow-hidden flex gap-3 ${eMaisBarato ? 'bg-gradient-to-br from-emerald-900 to-slate-800 border border-emerald-500 shadow-lg' : 'bg-slate-800 border border-slate-700'}`;
             
-            card.innerHTML = `${eMaisBarato ? '<div class="absolute -top-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>' : ''}<div class="w-16 h-16 bg-white/10 rounded-xl p-1 flex-shrink-0 flex items-center justify-center border border-white/10"><img src="${imgUrl}" class="max-w-full max-h-full object-contain"></div><div class="flex-1 relative z-10 flex flex-col justify-between"><div>${eMaisBarato ? `<div class="absolute -top-1 -right-1"><span class="bg-white text-orange-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase shadow-sm"><i class="fas fa-crown"></i> Só o Ouro</span></div>` : ''}<h3 class="text-2xl font-black ${eMaisBarato ? 'text-white' : 'text-emerald-400'}">R$ ${item.preco.toFixed(2).replace('.', ',')}</h3><p class="font-bold text-xs uppercase ${eMaisBarato ? 'text-white' : 'text-slate-300'} line-clamp-1 mt-0.5"><i class="fas fa-store mr-1 opacity-70"></i> ${item.mercado}</p></div><div class="flex justify-between items-end border-t ${eMaisBarato ? 'border-white/20' : 'border-slate-700'} pt-2 mt-2"><div class="flex items-center gap-1.5"><i class="fas fa-user text-[10px]"></i><span class="text-[10px] font-bold">${item.usuario || 'Anônimo'}</span></div><span class="text-[9px] opacity-60">${new Date(item.data).toLocaleDateString('pt-BR').slice(0,5)}</span></div></div>`;
+            card.innerHTML = `
+                <div class="w-14 h-14 bg-white/5 rounded-xl p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div>
+                <div class="flex-1 relative z-10">
+                    ${eMaisBarato ? `<span class="bg-emerald-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase absolute -top-1 right-0">Melhor Preço</span>` : ''}
+                    <h3 class="text-xl font-black ${eMaisBarato ? 'text-emerald-400' : 'text-white'}">R$ ${item.preco.toFixed(2).replace('.', ',')}</h3>
+                    <p class="font-bold text-[10px] uppercase text-slate-300 line-clamp-1">${item.mercado}</p>
+                    <p class="text-[9px] text-slate-500 mt-1">Enviado por ${item.usuario || 'Anônimo'} em ${new Date(item.data).toLocaleDateString()}</p>
+                </div>
+                <button onclick="adicionarAoCarrinho('${item.produto}', ${item.preco}, '${item.mercado}')" class="self-center w-10 h-10 rounded-full bg-slate-700 hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center justify-center transition-colors shadow-lg">
+                    <i class="fas fa-cart-plus"></i>
+                </button>
+            `;
             container.appendChild(card);
         });
-    } catch (err) { mostrarNotificacao("Erro na busca.", "erro"); btn.innerHTML = originalIcon; }
+    } catch (err) { mostrarNotificacao("Erro na busca.", "erro"); btn.innerHTML = iconOriginal; }
+}
+
+// --- CHAT KALANGO ---
+async function enviarMensagemGemini() {
+    const input = document.getElementById('chat-input');
+    const area = document.getElementById('chat-messages');
+    const txt = input.value.trim();
+    if (!txt) return;
+    
+    area.innerHTML += `<div class="chat-user text-sm mb-2">${txt}</div>`;
+    input.value = '';
+    area.scrollTop = area.scrollHeight; // Auto scroll
+    
+    // Loading falso
+    const id = 'load-' + Date.now();
+    area.innerHTML += `<div id="${id}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Digitando...</div>`;
+    area.scrollTop = area.scrollHeight;
+    
+    try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(txt)}`, { redirect: 'follow' });
+        const data = await res.json();
+        document.getElementById(id).remove();
+        
+        if (data.resposta) {
+            const r = data.resposta.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            area.innerHTML += `<div class="chat-ai text-sm mb-2">${r}</div>`;
+        } else {
+            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">Sem resposta.</div>`;
+        }
+    } catch (e) {
+        if(document.getElementById(id)) document.getElementById(id).remove();
+        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Erro de conexão.</div>`;
+    }
+    area.scrollTop = area.scrollHeight;
+}
+
+// --- SCANNER & INIT ---
+async function iniciarCamera(modo) {
+    if (scannerIsRunning) return;
+    if (modo === 'pesquisar') {
+        trocarAba('registrar'); // Reusa a aba de registro para escanear
+        document.querySelector('#scanner-section h2').textContent = "Escanear para Pesquisar";
+        // Override function success temporariamente
+        const originalSuccess = onScanSuccess;
+        onScanSuccess = async (t) => {
+            html5QrCode.stop().then(() => { 
+                document.getElementById('reader').innerHTML = ''; scannerIsRunning = false; 
+                trocarAba('consultar');
+                document.getElementById('ean-busca').value = t;
+                pesquisarPrecos();
+                onScanSuccess = originalSuccess; // Restaura
+            });
+        };
+    }
+    try {
+        if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+        scannerIsRunning = true;
+        await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess);
+        document.getElementById('start-scan-btn').classList.add('hidden');
+    } catch (err) {
+        scannerIsRunning = false;
+        mostrarNotificacao("Erro na câmera", "erro");
+        document.getElementById('start-scan-btn').classList.remove('hidden');
+    }
+}
+
+async function onScanSuccess(decodedText) {
+    if (html5QrCode) {
+        html5QrCode.stop().then(() => { document.getElementById('reader').innerHTML = ''; scannerIsRunning = false; }).catch(() => scannerIsRunning = false);
+    }
+    document.getElementById('start-scan-btn').classList.remove('hidden');
+    
+    // Modo Registro
+    document.getElementById('scanner-section').classList.add('hidden');
+    document.getElementById('price-form-section').classList.remove('hidden');
+    document.getElementById('ean-field').value = decodedText;
+    document.getElementById('product-name').value = "Buscando...";
+    
+    try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?ean=${decodedText}`, { redirect: 'follow' });
+        const data = await res.json();
+        document.getElementById('product-name').value = data.nome || "";
+        if(data.imagem && data.imagem.startsWith('http')) {
+            document.getElementById('image-url-field').value = data.imagem;
+            document.getElementById('preview-imagem').src = data.imagem;
+            document.getElementById('preview-imagem').classList.remove('hidden');
+            document.getElementById('btn-camera-foto').classList.add('hidden');
+        }
+    } catch(e) { document.getElementById('product-name').value = ""; }
 }
 
 async function salvarPreco(e) {
-    e.preventDefault(); const btn = e.target.querySelector('button'); const originalText = btn.innerHTML; btn.innerHTML = '<div class="loader w-5 h-5 border-white"></div>'; btn.disabled = true;
-    const payload = { ean: document.getElementById('ean-field').value, produto: document.getElementById('product-name').value, preco: document.getElementById('price').value, mercado: document.getElementById('market').value, usuario: document.getElementById('username').value, imagem: document.getElementById('image-url-field').value };
-    try { await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); mostrarNotificacao("Preço registrado!"); setTimeout(() => location.reload(), 2000); } catch (err) { mostrarNotificacao("Erro ao salvar.", "erro"); btn.innerHTML = originalText; btn.disabled = false; }
+    e.preventDefault(); 
+    const btn = e.target.querySelector('button[type="submit"]'); 
+    const txt = btn.innerHTML; 
+    btn.innerHTML = '...'; btn.disabled = true;
+    
+    const payload = { 
+        ean: document.getElementById('ean-field').value, 
+        produto: document.getElementById('product-name').value, 
+        preco: document.getElementById('price').value, 
+        mercado: document.getElementById('market').value, 
+        usuario: document.getElementById('username').value, 
+        imagem: document.getElementById('image-url-field').value 
+    };
+    
+    try { 
+        await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
+        mostrarNotificacao("Salvo com sucesso!"); 
+        setTimeout(() => location.reload(), 1500); 
+    } catch (err) { 
+        mostrarNotificacao("Erro ao salvar", "erro"); 
+        btn.innerHTML = txt; btn.disabled = false; 
+    }
 }
 
-async function loadMarkets() {
-    const select = document.getElementById('market');
-    if(!select) return;
-    try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const data = await res.json(); if(data.mercados) { select.innerHTML = '<option value="">Selecione...</option>'; data.mercados.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); }); } } catch (e) { select.innerHTML = '<option value="Geral">Mercado Geral</option>'; }
-}
-
-// --- INICIALIZAÇÃO E BOAS VINDAS DO KALANGO ---
+// Init
 document.addEventListener('DOMContentLoaded', () => {
+    atualizarContadorCarrinho();
     
-    // 1. FORÇAR A MENSAGEM DO KALANGO (Sobrescreve o HTML antigo)
-    const chatArea = document.getElementById('chat-messages');
-    if(chatArea) {
-        chatArea.innerHTML = `
-            <div class="chat-ai text-sm mb-2">
-                Opa, meu patrão! O <b>Kalango</b> tá on! 🦎<br>
-                Tô de olho nos preços de Luís Gomes.<br>
-                O que a gente vai caçar hoje?
-            </div>
-        `;
-    }
+    const f = document.getElementById('filtro-mercado-catalogo');
+    if(f) f.addEventListener('change', () => {
+        const v = f.value;
+        if(v === 'todos') atualizarListaCatalogo(catalogoDados);
+        else atualizarListaCatalogo(catalogoDados.filter(i => i.mercado === v));
+    });
 
-    loadMarkets();
-
-    // Listeners
-    if(document.getElementById('nav-registrar')) document.getElementById('nav-registrar').addEventListener('click', () => trocarAba('registrar'));
-    if(document.getElementById('nav-consultar')) document.getElementById('nav-consultar').addEventListener('click', () => trocarAba('consultar'));
-    if(document.getElementById('nav-catalogo')) document.getElementById('nav-catalogo').addEventListener('click', () => trocarAba('catalogo'));
-    if(document.getElementById('nav-chat')) document.getElementById('nav-chat').addEventListener('click', () => trocarAba('chat'));
-    
-    if(document.getElementById('start-scan-btn')) document.getElementById('start-scan-btn').addEventListener('click', () => iniciarCamera('registrar'));
-    
-    const btnScanSearch = document.getElementById('btn-scan-pesquisa'); 
-    if (btnScanSearch) btnScanSearch.addEventListener('click', (e) => { e.preventDefault(); iniciarCamera('pesquisar'); });
-    
-    if(document.getElementById('btn-pesquisar')) document.getElementById('btn-pesquisar').addEventListener('click', pesquisarPrecos);
-    if(document.getElementById('price-form')) document.getElementById('price-form').addEventListener('submit', salvarPreco);
-    if(document.getElementById('filtro-mercado-catalogo')) document.getElementById('filtro-mercado-catalogo').addEventListener('change', filtrarCatalogo);
-    if(document.getElementById('btn-enviar-chat')) document.getElementById('btn-enviar-chat').addEventListener('click', enviarMensagemGemini);
-
-    // Camera Input manual
-    const btnFoto = document.getElementById('btn-camera-foto');
-    const inputFoto = document.getElementById('input-foto-produto');
-    const imgPreview = document.getElementById('preview-imagem');
-    const urlField = document.getElementById('image-url-field');
-    
-    if(btnFoto && inputFoto) {
-        btnFoto.addEventListener('click', () => inputFoto.click());
-        inputFoto.addEventListener('change', async (e) => {
-            if(e.target.files && e.target.files[0]) {
-                const file = e.target.files[0]; btnFoto.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; 
-                try { const base64 = await comprimirImagem(file); imgPreview.src = base64; imgPreview.classList.remove('hidden'); btnFoto.classList.add('hidden'); urlField.value = base64; } catch(err) { mostrarNotificacao("Erro na foto", "erro"); btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>'; }
+    // Load initial data
+    (async () => {
+        try { 
+            const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); 
+            const d = await res.json();
+            const s = document.getElementById('market');
+            if(d.mercados && s) {
+                s.innerHTML = '';
+                d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); });
             }
-        });
-    }
-
-    const user = localStorage.getItem('radar_user'); 
-    if(user && document.getElementById('username')) document.getElementById('username').value = user; 
-    if(document.getElementById('username')) document.getElementById('username').addEventListener('input', (e) => localStorage.setItem('radar_user', e.target.value));
+        } catch(e) {}
+    })();
 });
-
-
