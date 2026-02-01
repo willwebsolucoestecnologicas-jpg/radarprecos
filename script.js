@@ -187,7 +187,6 @@ async function enviarMensagemGemini() {
     }
     area.scrollTop = area.scrollHeight;
 }
-}
 // --- AJUSTE CRÍTICO NO CHAT (USAR GET PARA LER RESPOSTA) ---
 // Para funcionar de verdade, substitua a função `processarChatGemini` no code.gs para ser acessível via GET também.
 // No código que te mandei acima, o chat está no POST.
@@ -351,4 +350,5 @@ async function loadMarkets() {
     const select = document.getElementById('market');
     try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const data = await res.json(); if(data.mercados) { select.innerHTML = '<option value="">Selecione...</option>'; data.mercados.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); }); } } catch (e) { select.innerHTML = '<option value="Geral">Mercado Geral</option>'; }
 }
+
 
