@@ -1,4 +1,4 @@
-// script.js - v8.9 (Correção: IA busca o preço real no banco antes de adicionar)
+// script.js - v9.0 (Correção: Ignora preços zerados e valida valores)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 let html5QrCode;
@@ -55,13 +55,16 @@ function atualizarContadorCarrinho() {
 }
 
 function adicionarAoCarrinho(produto, preco, mercado) {
+    // Garante que preço é número e positivo
+    let precoFinal = parseFloat(preco);
+    if (isNaN(precoFinal) || precoFinal < 0) precoFinal = 0;
+
     const id = produto + mercado; 
     const existente = carrinho.find(i => i.id === id);
-    if (existente) existente.qtd++; else carrinho.push({ id, produto, preco, mercado, qtd: 1 });
+    if (existente) existente.qtd++; else carrinho.push({ id, produto, preco: precoFinal, mercado, qtd: 1 });
     salvarCarrinho();
     
-    // Feedback visual diferente se for item sem preço
-    if (preco === 0) mostrarNotificacao(`⚠️ ${produto} (Sem preço cadastrado)`, "erro");
+    if (precoFinal === 0) mostrarNotificacao(`⚠️ ${produto} (Adicionado sem preço)`, "erro");
     else mostrarNotificacao(`+1 ${produto}`);
     
     const btnCart = document.getElementById('btn-carrinho-flutuante');
@@ -143,7 +146,7 @@ async function onScanSuccess(decodedText) {
 
 async function salvarPreco(e) { e.preventDefault(); const btn = e.target.querySelector('button[type="submit"]'); const txt = btn.innerHTML; btn.innerHTML = '...'; btn.disabled = true; const payload = { ean: document.getElementById('ean-field').value, produto: document.getElementById('product-name').value, preco: document.getElementById('price').value, mercado: document.getElementById('market').value, usuario: document.getElementById('username').value, imagem: document.getElementById('image-url-field').value }; try { await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); mostrarNotificacao("Salvo!"); setTimeout(() => location.reload(), 1500); } catch (err) { mostrarNotificacao("Erro", "erro"); btn.innerHTML = txt; btn.disabled = false; } }
 
-// --- CHAT COM INTELIGÊNCIA REAL (BUSCA NO DB) ---
+// --- CHAT COM INTELIGÊNCIA REAL (CORREÇÃO DE PREÇO 0) ---
 async function enviarMensagemGemini() {
     const input = document.getElementById('chat-input');
     const area = document.getElementById('chat-messages');
@@ -164,15 +167,13 @@ async function enviarMensagemGemini() {
         
         if (data.resposta) {
             let respostaLimpa = data.resposta;
-            
-            // DETECTA COMANDO E CHAMA A BUSCA INTELIGENTE
+            // DETECTA COMANDO
             const comandoAdd = respostaLimpa.match(/\|\|ADD:(.*?)\|\|/);
             if (comandoAdd && comandoAdd[1]) {
                 const termo = comandoAdd[1].trim();
-                buscarMelhorPrecoEAdicionar(termo); // <--- AQUI ESTÁ A CORREÇÃO
+                buscarMelhorPrecoEAdicionar(termo); // CHAMA A BUSCA
                 respostaLimpa = respostaLimpa.replace(comandoAdd[0], "");
             }
-
             const r = respostaLimpa.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
             area.innerHTML += `<div class="chat-ai text-sm mb-2">${r}</div>`;
         } else {
@@ -185,34 +186,37 @@ async function enviarMensagemGemini() {
     area.scrollTop = area.scrollHeight;
 }
 
-// NOVA FUNÇÃO: BUSCA O ITEM NO BANCO ANTES DE ADICIONAR
+// BUSCA INTELIGENTE (FILTRO DE ZEROS ADICIONADO)
 async function buscarMelhorPrecoEAdicionar(termo) {
-    mostrarNotificacao(`🔍 Procurando melhor oferta de: ${termo}...`);
-    
+    mostrarNotificacao(`🔍 Procurando: ${termo}...`);
     try {
-        // Usa a rota de busca que já existe
         const res = await fetch(`${APPS_SCRIPT_URL}?acao=consultarPrecos&ean=${encodeURIComponent(termo)}`, { redirect: 'follow' });
         const data = await res.json();
         
+        // AQUI ESTÁ A CORREÇÃO: Filtra apenas itens com preço > 0
         if (data.resultados && data.resultados.length > 0) {
-            // Ordena pelo preço (menor para maior) e pega o primeiro
-            const melhorOpcao = data.resultados.sort((a, b) => a.preco - b.preco)[0];
+            const validos = data.resultados.filter(i => parseFloat(i.preco) > 0);
             
-            // Adiciona o item REAL encontrado
-            adicionarAoCarrinho(melhorOpcao.produto, melhorOpcao.preco, melhorOpcao.mercado);
-            
-            // Avisa o usuário no chat (opcional, mas legal)
-            const area = document.getElementById('chat-messages');
-            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-emerald-400">✅ Achei! Adicionei <b>${melhorOpcao.produto}</b> por <b>R$ ${melhorOpcao.preco.toFixed(2)}</b> no ${melhorOpcao.mercado}.</div>`;
-            area.scrollTop = area.scrollHeight;
-            
+            if (validos.length > 0) {
+                // Pega o mais barato que NÃO é zero
+                const melhorOpcao = validos.sort((a, b) => a.preco - b.preco)[0];
+                adicionarAoCarrinho(melhorOpcao.produto, melhorOpcao.preco, melhorOpcao.mercado);
+                const area = document.getElementById('chat-messages');
+                area.innerHTML += `<div class="chat-ai text-sm mb-2 text-emerald-400">✅ Achei! <b>${melhorOpcao.produto}</b> por <b>R$ ${melhorOpcao.preco.toFixed(2)}</b> no ${melhorOpcao.mercado}.</div>`;
+            } else {
+                // Achou o produto, mas todos os preços eram 0
+                adicionarAoCarrinho(termo, 0, "Preço zerado no sistema");
+                const area = document.getElementById('chat-messages');
+                area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">⚠️ Achei o produto "${termo}", mas estava sem preço cadastrado.</div>`;
+            }
         } else {
-            // Se não achar nada no banco, adiciona como item genérico (R$ 0,00)
-            adicionarAoCarrinho(termo, 0, "Não encontrado no banco");
+            // Não achou nada
+            adicionarAoCarrinho(termo, 0, "Item não cadastrado");
             const area = document.getElementById('chat-messages');
-            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">⚠️ Não achei preço pra "<b>${termo}</b>", mas botei na lista pra tu não esquecer.</div>`;
-            area.scrollTop = area.scrollHeight;
+            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">⚠️ Não encontrei "<b>${termo}</b>" no banco, mas adicionei à lista.</div>`;
         }
+        const area = document.getElementById('chat-messages');
+        area.scrollTop = area.scrollHeight;
     } catch (e) {
         adicionarAoCarrinho(termo, 0, "Erro na busca");
     }
