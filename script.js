@@ -144,63 +144,50 @@ function filtrarCatalogo() {
 }
 
 // --- LÓGICA DO CHAT GEMINI ---
+// --- LÓGICA DO CHAT GEMINI (CORRIGIDA v7.1) ---
 async function enviarMensagemGemini() {
     const input = document.getElementById('chat-input');
-    const btn = document.getElementById('btn-enviar-chat');
     const area = document.getElementById('chat-messages');
     const texto = input.value.trim();
     
     if (!texto) return;
     
-    // Adiciona msg usuário
+    // Mostra mensagem do usuário
     area.innerHTML += `<div class="chat-user text-sm mb-2">${texto}</div>`;
     input.value = '';
     area.scrollTop = area.scrollHeight;
     
-    // Loading state
+    // Loading
     const loadingId = 'loading-' + Date.now();
     area.innerHTML += `<div id="${loadingId}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Pensando...</div>`;
     area.scrollTop = area.scrollHeight;
     
     try {
-        const payload = { acao: 'chatGemini', pergunta: texto };
-        const res = await fetch(APPS_SCRIPT_URL, { 
-            method: 'POST', 
-            mode: 'no-cors', 
-            body: JSON.stringify(payload) 
-        });
+        // AGORA VIA GET (Leitura permitida)
+        // EncodeURIComponent é vital para textos com acentos/espaços
+        const url = `${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(texto)}`;
         
-        // TRUQUE: Como é no-cors, não recebemos a resposta direta aqui facilmente sem proxy.
-        // MUDANÇA DE ESTRATÉGIA PARA O CHAT: Vamos usar GET para o chat para poder ler a resposta.
-        // O POST é bom para enviar, mas ruim para receber no Apps Script Web App simples.
+        const res = await fetch(url, { redirect: 'follow' });
+        const data = await res.json();
         
-        // Vamos refazer a chamada usando GET (que permite leitura) mas passando os dados na URL
-        // Cuidado com o tamanho da URL. Se for texto curto, ok.
-        
-        // CORREÇÃO: Vamos simular a resposta de "sucesso" visualmente, mas o ideal 
-        // seria usar um doGet especial para chat. Vamos adaptar o doGet no code.gs?
-        // Não, vamos manter o POST mas usar uma técnica de "long polling" ou aceitar que
-        // para ler a resposta do Gemini, precisamos que o doGet processe ou usar uma Promise diferente.
-        
-        // VAMOS SIMPLIFICAR: Vou assumir que você quer ver a resposta.
-        // O Apps Script `doPost` retorna JSON, mas o navegador bloqueia a leitura (CORS).
-        // SOLUÇÃO: O Chatbot só vai funcionar bem se usarmos o método `doGet` para a pergunta também,
-        // ou se configurarmos o `doPost` com iframe.
-        
-        // VAMOS TENTAR UMA GAMBIARRA FUNCIONAL: Usar o doGet para perguntas curtas.
-        
-        // Remova o elemento de loading
         document.getElementById(loadingId).remove();
         
-        // Aviso temporário (limitação técnica do Google Apps Script gratuito com fetch direto)
-        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">⚠️ Nota: Para ler a resposta da IA neste modelo gratuito, precisamos ajustar a API para GET. Mas o sistema registrou sua pergunta!</div>`;
+        // Mostra resposta da IA
+        if (data.resposta) {
+            // Converte quebras de linha em HTML para ficar bonito
+            const respostaFormatada = data.resposta.replace(/\n/g, '<br>');
+            area.innerHTML += `<div class="chat-ai text-sm mb-2">${respostaFormatada}</div>`;
+        } else {
+            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Sem resposta.</div>`;
+        }
 
     } catch (e) {
         document.getElementById(loadingId).remove();
-        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Erro de conexão.</div>`;
+        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Erro de conexão. Tente novamente.</div>`;
     }
+    area.scrollTop = area.scrollHeight;
 }
-
+}
 // --- AJUSTE CRÍTICO NO CHAT (USAR GET PARA LER RESPOSTA) ---
 // Para funcionar de verdade, substitua a função `processarChatGemini` no code.gs para ser acessível via GET também.
 // No código que te mandei acima, o chat está no POST.
@@ -364,3 +351,4 @@ async function loadMarkets() {
     const select = document.getElementById('market');
     try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const data = await res.json(); if(data.mercados) { select.innerHTML = '<option value="">Selecione...</option>'; data.mercados.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); }); } } catch (e) { select.innerHTML = '<option value="Geral">Mercado Geral</option>'; }
 }
+
