@@ -25,6 +25,22 @@
         <i class="fas fa-check"></i> <span id="toast-message"></span>
     </div>
 
+    <div id="confirm-modal" class="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-6">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-3xl">
+                    <i class="fas fa-trash-alt"></i>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">Limpar tudo?</h3>
+                <p class="text-slate-400 text-sm">Você vai apagar todos os itens da sua lista de compras.</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="fecharModalConfirmacao()" class="flex-1 py-3 rounded-xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors">Cancelar</button>
+                <button onclick="confirmarLimpeza()" class="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-900/20 transition-colors">Apagar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="scanner-modal" class="fixed inset-0 z-[70] bg-black hidden flex-col">
         <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
             <h2 id="scanner-title" class="text-white font-bold text-lg drop-shadow-md">Escanear</h2>
@@ -59,7 +75,7 @@
                     <span class="text-slate-400 text-sm font-bold uppercase">Total Estimado</span>
                     <span class="text-3xl font-black text-emerald-400" id="cart-total-price">R$ 0,00</span>
                 </div>
-                <button onclick="limparCarrinho()" class="w-full bg-slate-700 hover:bg-red-500/20 text-slate-300 hover:text-red-400 font-bold py-3 rounded-xl transition-colors text-sm"><i class="fas fa-trash-alt mr-2"></i> Limpar Lista</button>
+                <button onclick="abrirModalLimpeza()" class="w-full bg-slate-700 hover:bg-red-500/20 text-slate-300 hover:text-red-400 font-bold py-3 rounded-xl transition-colors text-sm"><i class="fas fa-trash-alt mr-2"></i> Limpar Lista</button>
             </div>
         </div>
     </div>
@@ -72,57 +88,35 @@
                 <p class="text-[10px] text-emerald-500 font-bold tracking-widest uppercase">Luís Gomes • RN</p>
             </div>
         </div>
-        <div class="bg-slate-800 px-2 py-1 rounded text-[10px] text-slate-500 font-mono">v8.7</div>
+        <div class="bg-slate-800 px-2 py-1 rounded text-[10px] text-slate-500 font-mono">v8.8</div>
     </header>
 
     <main class="flex-1 overflow-y-auto relative scroll-smooth bg-[#0f172a]" id="main-content">
         
         <div id="registrar-container" class="px-4 py-4 pb-32 animate-fade-in">
             <div class="bg-slate-800 rounded-3xl p-6 border border-slate-700 shadow-xl text-center">
-                
                 <div id="registrar-home" class="py-10">
-                    <div class="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-400 text-3xl border border-slate-600">
-                        <i class="fas fa-barcode"></i>
-                    </div>
+                    <div class="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-400 text-3xl border border-slate-600"><i class="fas fa-barcode"></i></div>
                     <h2 class="text-xl font-bold text-white mb-2">Registrar Preço</h2>
                     <p class="text-sm text-slate-400 mb-8 max-w-[200px] mx-auto">Colabore com a comunidade lendo o código de barras.</p>
-                    
-                    <button onclick="iniciarCamera('registrar')" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-4 rounded-2xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 text-lg">
-                        <i class="fas fa-camera"></i> Ler Código
-                    </button>
+                    <button onclick="iniciarCamera('registrar')" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-4 rounded-2xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 text-lg"><i class="fas fa-camera"></i> Ler Código</button>
                     <button onclick="document.getElementById('ean-busca').focus(); trocarAba('consultar')" class="mt-6 text-xs text-slate-500 hover:text-white underline">Ou buscar manualmente</button>
                 </div>
-
                 <div id="price-form-section" class="hidden text-left animate-fade-in">
-                    <div class="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4">
-                        <button onclick="location.reload()" class="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center"><i class="fas fa-arrow-left"></i></button>
-                        <h3 class="font-bold text-white">Detalhes do Produto</h3>
-                    </div>
+                    <div class="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4"><button onclick="location.reload()" class="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center"><i class="fas fa-arrow-left"></i></button><h3 class="font-bold text-white">Detalhes do Produto</h3></div>
                     <form id="price-form" class="space-y-4">
                         <input type="hidden" id="ean-field"><input type="hidden" id="image-url-field">
                         <div class="flex gap-3">
                             <div id="btn-camera-foto" class="w-24 h-24 bg-slate-900 rounded-xl border border-slate-700 flex flex-col items-center justify-center cursor-pointer text-slate-500 hover:text-emerald-500 transition-colors"><i class="fas fa-camera mb-1 text-xl"></i><span class="text-[9px] font-bold uppercase">Foto</span></div>
                             <input type="file" id="input-foto-produto" accept="image/*" capture="environment" class="hidden">
                             <img id="preview-imagem" class="w-24 h-24 rounded-xl object-cover hidden border border-emerald-500 bg-black">
-                            <div class="flex-1 space-y-1">
-                                <label class="text-[10px] text-emerald-500 font-bold uppercase ml-1">Nome do Produto</label>
-                                <input type="text" id="product-name" class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:border-emerald-500 outline-none placeholder-slate-600 transition-all font-medium" placeholder="Ex: Café Santa Clara" required>
-                            </div>
+                            <div class="flex-1 space-y-1"><label class="text-[10px] text-emerald-500 font-bold uppercase ml-1">Nome do Produto</label><input type="text" id="product-name" class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:border-emerald-500 outline-none placeholder-slate-600 transition-all font-medium" placeholder="Ex: Café Santa Clara" required></div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div class="space-y-1">
-                                <label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Preço (R$)</label>
-                                <input type="number" id="price" step="0.01" class="w-full bg-slate-900 border border-slate-700 text-white text-lg font-bold rounded-xl px-4 py-3 focus:border-emerald-500 outline-none" placeholder="0.00" required>
-                            </div>
-                            <div class="space-y-1">
-                                <label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Mercado</label>
-                                <select id="market" class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-3 py-3 outline-none"><option>Carregando...</option></select>
-                            </div>
+                            <div class="space-y-1"><label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Preço (R$)</label><input type="number" id="price" step="0.01" class="w-full bg-slate-900 border border-slate-700 text-white text-lg font-bold rounded-xl px-4 py-3 focus:border-emerald-500 outline-none" placeholder="0.00" required></div>
+                            <div class="space-y-1"><label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Mercado</label><select id="market" class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-3 py-3 outline-none"><option>Carregando...</option></select></div>
                         </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Quem envia?</label>
-                            <input type="text" id="username" class="w-full bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl px-4 py-3 outline-none focus:border-emerald-500" placeholder="Seu nome (Opcional)">
-                        </div>
+                        <div class="space-y-1"><label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Quem envia?</label><input type="text" id="username" class="w-full bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl px-4 py-3 outline-none focus:border-emerald-500" placeholder="Seu nome (Opcional)"></div>
                         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl mt-2 shadow-lg shadow-emerald-900/20 active:scale-95 transition-all text-sm uppercase tracking-wide"><i class="fas fa-check-circle mr-2"></i> Salvar Preço</button>
                     </form>
                 </div>
@@ -134,18 +128,12 @@
                 <div class="relative flex-1">
                     <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
                     <input type="text" id="ean-busca" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl pl-10 pr-12 py-3 focus:border-emerald-500 outline-none shadow-lg text-sm placeholder-slate-500" placeholder="Digite nome ou código...">
-                    
-                    <button onclick="iniciarCamera('pesquisar')" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-emerald-400 hover:text-white transition-colors bg-emerald-500/10 rounded-lg active:scale-90">
-                        <i class="fas fa-barcode"></i>
-                    </button>
+                    <button onclick="iniciarCamera('pesquisar')" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-emerald-400 hover:text-white transition-colors bg-emerald-500/10 rounded-lg active:scale-90"><i class="fas fa-barcode"></i></button>
                 </div>
                 <button id="btn-pesquisar" class="bg-emerald-500 hover:bg-emerald-400 text-slate-900 w-12 rounded-xl flex items-center justify-center shadow-lg font-bold z-30 active:scale-95 transition-all"><i class="fas fa-arrow-right"></i></button>
             </div>
             <div id="resultados-consulta" class="overflow-y-auto pb-32">
-                <div class="text-center py-20 opacity-30">
-                    <i class="fas fa-search text-5xl mb-4 text-slate-600"></i>
-                    <p class="text-sm text-slate-400">Busque produtos ou<br>escaneie um código.</p>
-                </div>
+                <div class="text-center py-20 opacity-30"><i class="fas fa-search text-5xl mb-4 text-slate-600"></i><p class="text-sm text-slate-400">Busque produtos ou<br>escaneie um código.</p></div>
             </div>
         </div>
 
@@ -161,7 +149,7 @@
             <div id="chat-messages" class="absolute top-0 left-0 w-full h-full overflow-y-auto p-4 pb-40 space-y-3">
                 <div class="chat-ai text-sm">
                     Opa, meu patrão! O <b>Kalango</b> tá on! 🦎<br>
-                    Tô aqui pra achar preço baixo. O que tu procura?
+                    Pode falar o que tu quer que eu boto no carrinho. <br>Ex: "Bota arroz e café".
                 </div>
             </div>
             <div class="fixed bottom-[85px] left-0 w-full px-4 z-50 pointer-events-auto">
