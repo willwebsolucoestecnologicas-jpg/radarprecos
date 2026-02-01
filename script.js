@@ -1,5 +1,5 @@
 // script.js - v7.2 (DEBUGGER E CHAT GET)
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzz2eQeyVidWZinYx86ErR43hHQg-MQhQwSz8Hj19OzHoJLPaKXrrI0cZeFr1RY58K1/exec'; 
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 let html5QrCode;
 let scannerIsRunning = false;
@@ -351,3 +351,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const user = localStorage.getItem('radar_user'); if(user) document.getElementById('username').value = user; document.getElementById('username').addEventListener('input', (e) => localStorage.setItem('radar_user', e.target.value));
 });
+
