@@ -1,4 +1,4 @@
-// script.js - v8.8 (Comando de Voz + Modal Bonito + Câmera Global)
+// script.js - v8.9 (Correção: IA busca o preço real no banco antes de adicionar)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 let html5QrCode;
@@ -34,7 +34,7 @@ async function trocarAba(aba) {
     if (aba === 'chat') { const ca = document.getElementById('chat-messages'); setTimeout(() => ca.scrollTop = ca.scrollHeight, 100); }
 }
 
-// --- CARRINHO & MODAL DE LIMPEZA (NOVO!) ---
+// --- CARRINHO & MODAL ---
 function toggleCarrinho() {
     const modal = document.getElementById('cart-modal');
     const content = document.getElementById('cart-content');
@@ -55,14 +55,15 @@ function atualizarContadorCarrinho() {
 }
 
 function adicionarAoCarrinho(produto, preco, mercado) {
-    // Se preço não for número (comando de voz), assume 0 ou busca
-    if (typeof preco !== 'number') preco = 0; 
-    
     const id = produto + mercado; 
     const existente = carrinho.find(i => i.id === id);
     if (existente) existente.qtd++; else carrinho.push({ id, produto, preco, mercado, qtd: 1 });
     salvarCarrinho();
-    mostrarNotificacao(`+1 ${produto} na lista!`);
+    
+    // Feedback visual diferente se for item sem preço
+    if (preco === 0) mostrarNotificacao(`⚠️ ${produto} (Sem preço cadastrado)`, "erro");
+    else mostrarNotificacao(`+1 ${produto}`);
+    
     const btnCart = document.getElementById('btn-carrinho-flutuante');
     if(btnCart) { btnCart.classList.add('scale-125'); setTimeout(() => btnCart.classList.remove('scale-125'), 200); }
 }
@@ -77,25 +78,10 @@ function alterarQtd(id, delta) {
     renderizarCarrinho();
 }
 
-// NOVA LÓGICA DE LIMPEZA (JANELA BONITA)
-function abrirModalLimpeza() {
-    document.getElementById('confirm-modal').classList.remove('hidden');
-}
-function fecharModalConfirmacao() {
-    document.getElementById('confirm-modal').classList.add('hidden');
-}
-function confirmarLimpeza() {
-    carrinho = [];
-    salvarCarrinho();
-    renderizarCarrinho();
-    fecharModalConfirmacao();
-    toggleCarrinho();
-}
-
-function salvarCarrinho() {
-    localStorage.setItem('kalango_cart', JSON.stringify(carrinho));
-    atualizarContadorCarrinho();
-}
+function abrirModalLimpeza() { document.getElementById('confirm-modal').classList.remove('hidden'); }
+function fecharModalConfirmacao() { document.getElementById('confirm-modal').classList.add('hidden'); }
+function confirmarLimpeza() { carrinho = []; salvarCarrinho(); renderizarCarrinho(); fecharModalConfirmacao(); toggleCarrinho(); }
+function salvarCarrinho() { localStorage.setItem('kalango_cart', JSON.stringify(carrinho)); atualizarContadorCarrinho(); }
 
 function renderizarCarrinho() {
     const container = document.getElementById('cart-items');
@@ -127,7 +113,7 @@ function renderizarCarrinho() {
     totalEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`; totalItemsEl.textContent = `${qtdTotal} itens`;
 }
 
-// --- CÂMERA ---
+// --- CÂMERA GLOBAL ---
 async function iniciarCamera(modo) {
     if (scannerIsRunning) return;
     modoScanAtual = modo;
@@ -157,7 +143,7 @@ async function onScanSuccess(decodedText) {
 
 async function salvarPreco(e) { e.preventDefault(); const btn = e.target.querySelector('button[type="submit"]'); const txt = btn.innerHTML; btn.innerHTML = '...'; btn.disabled = true; const payload = { ean: document.getElementById('ean-field').value, produto: document.getElementById('product-name').value, preco: document.getElementById('price').value, mercado: document.getElementById('market').value, usuario: document.getElementById('username').value, imagem: document.getElementById('image-url-field').value }; try { await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); mostrarNotificacao("Salvo!"); setTimeout(() => location.reload(), 1500); } catch (err) { mostrarNotificacao("Erro", "erro"); btn.innerHTML = txt; btn.disabled = false; } }
 
-// --- CHAT COM INTELIGÊNCIA DE COMANDO (VOZ PARA AÇÃO) ---
+// --- CHAT COM INTELIGÊNCIA REAL (BUSCA NO DB) ---
 async function enviarMensagemGemini() {
     const input = document.getElementById('chat-input');
     const area = document.getElementById('chat-messages');
@@ -179,12 +165,12 @@ async function enviarMensagemGemini() {
         if (data.resposta) {
             let respostaLimpa = data.resposta;
             
-            // DETECTA COMANDO DE ADICIONAR (||ADD:Produto||)
+            // DETECTA COMANDO E CHAMA A BUSCA INTELIGENTE
             const comandoAdd = respostaLimpa.match(/\|\|ADD:(.*?)\|\|/);
             if (comandoAdd && comandoAdd[1]) {
-                const produtoParaAdicionar = comandoAdd[1].trim();
-                adicionarAoCarrinho(produtoParaAdicionar, 0, "Via Kalango"); // Adiciona com preço 0
-                respostaLimpa = respostaLimpa.replace(comandoAdd[0], ""); // Remove o código da fala
+                const termo = comandoAdd[1].trim();
+                buscarMelhorPrecoEAdicionar(termo); // <--- AQUI ESTÁ A CORREÇÃO
+                respostaLimpa = respostaLimpa.replace(comandoAdd[0], "");
             }
 
             const r = respostaLimpa.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
@@ -197,6 +183,39 @@ async function enviarMensagemGemini() {
         area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Erro de conexão.</div>`;
     }
     area.scrollTop = area.scrollHeight;
+}
+
+// NOVA FUNÇÃO: BUSCA O ITEM NO BANCO ANTES DE ADICIONAR
+async function buscarMelhorPrecoEAdicionar(termo) {
+    mostrarNotificacao(`🔍 Procurando melhor oferta de: ${termo}...`);
+    
+    try {
+        // Usa a rota de busca que já existe
+        const res = await fetch(`${APPS_SCRIPT_URL}?acao=consultarPrecos&ean=${encodeURIComponent(termo)}`, { redirect: 'follow' });
+        const data = await res.json();
+        
+        if (data.resultados && data.resultados.length > 0) {
+            // Ordena pelo preço (menor para maior) e pega o primeiro
+            const melhorOpcao = data.resultados.sort((a, b) => a.preco - b.preco)[0];
+            
+            // Adiciona o item REAL encontrado
+            adicionarAoCarrinho(melhorOpcao.produto, melhorOpcao.preco, melhorOpcao.mercado);
+            
+            // Avisa o usuário no chat (opcional, mas legal)
+            const area = document.getElementById('chat-messages');
+            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-emerald-400">✅ Achei! Adicionei <b>${melhorOpcao.produto}</b> por <b>R$ ${melhorOpcao.preco.toFixed(2)}</b> no ${melhorOpcao.mercado}.</div>`;
+            area.scrollTop = area.scrollHeight;
+            
+        } else {
+            // Se não achar nada no banco, adiciona como item genérico (R$ 0,00)
+            adicionarAoCarrinho(termo, 0, "Não encontrado no banco");
+            const area = document.getElementById('chat-messages');
+            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">⚠️ Não achei preço pra "<b>${termo}</b>", mas botei na lista pra tu não esquecer.</div>`;
+            area.scrollTop = area.scrollHeight;
+        }
+    } catch (e) {
+        adicionarAoCarrinho(termo, 0, "Erro na busca");
+    }
 }
 
 // --- UTILITÁRIOS FINAIS ---
