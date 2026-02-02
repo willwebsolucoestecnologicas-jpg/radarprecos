@@ -1,7 +1,7 @@
-// script.js - v12.0 (Restaurado + Login Novo)
+// script.js - v14.0 (Base v12 + Voz + Status Digitando)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
-// --- CONFIGURAÇÃO DO FIREBASE (O QUE FUNCIONOU) ---
+// --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyCwNVNTZiUJ9qeqniRK9GHDofB9HaQTJ_c",
     authDomain: "kalango-app.firebaseapp.com",
@@ -17,34 +17,30 @@ if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const auth = firebase.auth();
-// Se precisar usar Firestore no futuro, descomente:
-// const db = firebase.firestore();
 
-// --- VARIÁVEIS DO SEU SCRIPT ORIGINAL ---
+// --- VARIÁVEIS GLOBAIS ---
 let html5QrCode;
 let scannerIsRunning = false;
 let catalogoDados = [];
 let carrinho = JSON.parse(localStorage.getItem('kalango_cart')) || [];
 let modoScanAtual = 'registrar';
-let currentUser = null; // Variável global do usuário
+let currentUser = null; 
 
 const USUARIOS_VERIFICADOS = ['Will', 'Admin', 'Kalango', 'WillWeb', 'Suporte'];
 
-// --- AUTENTICAÇÃO ROBUSTA (A ÚNICA MUDANÇA NO SEU SCRIPT) ---
+// --- AUTENTICAÇÃO (MANTIDA IDÊNTICA AO QUE FUNCIONA) ---
 function fazerLoginGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     const btn = document.querySelector('button[onclick="fazerLoginGoogle()"]');
     
     if(btn) { btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Entrando...'; btn.disabled = true; }
 
-    // Usa POP-UP com persistência local (o que funcionou no seu teste)
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
         .then(() => {
             return auth.signInWithPopup(provider);
         })
         .then((result) => {
             mostrarNotificacao(`Bem-vindo, ${result.user.displayName.split(' ')[0]}!`);
-            // O onAuthStateChanged vai atualizar a tela
         })
         .catch((error) => {
             console.error("Erro Login:", error);
@@ -53,23 +49,19 @@ function fazerLoginGoogle() {
         });
 }
 
-// Monitora o login e libera o app
 auth.onAuthStateChanged((user) => {
     if (user) {
         currentUser = user;
-        // Preenche os campos que seu script original usa
         if(document.getElementById('username')) document.getElementById('username').value = user.displayName;
         if(document.getElementById('user-name-display')) document.getElementById('user-name-display').textContent = user.displayName.split(' ')[0];
         if(document.getElementById('user-avatar')) document.getElementById('user-avatar').src = user.photoURL;
         
-        // Esconde tela de login e mostra perfil
         document.getElementById('login-screen').classList.add('hidden');
         if(document.getElementById('user-profile')) {
             document.getElementById('user-profile').classList.remove('hidden');
             document.getElementById('user-profile').classList.add('flex');
         }
         
-        // Chama funções de inicialização
         atualizarContadorCarrinho();
         if(typeof carregarCatalogo === 'function') carregarCatalogo();
     } else {
@@ -79,7 +71,48 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-// --- DAQUI PRA BAIXO É 100% O SEU CÓDIGO ORIGINAL ---
+// --- FUNÇÕES DE COMANDO DE VOZ (NOVIDADE v14) 🎤 ---
+function iniciarGravacaoVoz() {
+    if (!('webkitSpeechRecognition' in window)) {
+        alert("Seu navegador não suporta comando de voz. Tente usar o Chrome.");
+        return;
+    }
+    
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    const btnMic = document.getElementById('btn-mic-chat');
+    const iconOriginal = btnMic.innerHTML;
+    
+    recognition.onstart = function() {
+        btnMic.innerHTML = '<i class="fas fa-microphone-lines text-red-500 fa-beat"></i>';
+        mostrarNotificacao("Ouvindo...", "sucesso");
+    };
+    
+    recognition.onresult = function(event) {
+        const texto = event.results[0][0].transcript;
+        const input = document.getElementById('chat-input');
+        input.value = texto;
+        // Se quiser enviar automático ao parar de falar, descomente abaixo:
+        // enviarMensagemGemini(); 
+    };
+    
+    recognition.onerror = function(event) {
+        console.error("Erro voz:", event.error);
+        mostrarNotificacao("Não entendi.", "erro");
+        btnMic.innerHTML = iconOriginal;
+    };
+    
+    recognition.onend = function() {
+        btnMic.innerHTML = iconOriginal;
+    };
+    
+    recognition.start();
+}
+
+// --- FUNÇÕES GERAIS DO APP ---
 
 function gerarSeloUsuario(nome) {
     if (!nome) return `<span class="text-[9px] text-slate-500 italic">Anônimo</span>`;
@@ -98,7 +131,6 @@ async function trocarAba(aba) {
     document.getElementById(aba + '-container').classList.remove('hidden');
     document.getElementById('nav-' + aba).className = "nav-btn text-emerald-500";
     
-    // Controle do carrinho flutuante
     const btnCarrinho = document.getElementById('btn-carrinho-flutuante');
     if (btnCarrinho) { 
         if (aba === 'chat' || carrinho.length === 0) btnCarrinho.classList.add('hidden');
@@ -136,7 +168,6 @@ function atualizarContadorCarrinho() {
         badge.classList.toggle('hidden', count === 0);
     }
     
-    // Esconde carrinho se estiver vazio ou se estiver na aba chat
     const abaChatVisivel = !document.getElementById('chat-container').classList.contains('hidden');
     if (count === 0 && btnCarrinho) {
         btnCarrinho.classList.add('hidden');
@@ -275,7 +306,6 @@ async function onScanSuccess(decodedText) {
         document.getElementById('ean-field').value = decodedText;
         document.getElementById('product-name').value = "Buscando...";
         
-        // Busca info do produto
         try {
             const res = await fetch(`${APPS_SCRIPT_URL}?ean=${decodedText}`, { redirect: 'follow' });
             const data = await res.json();
@@ -374,7 +404,6 @@ async function carregarCatalogo() {
             catalogoDados = data.catalogo; 
             atualizarListaCatalogo(catalogoDados); 
             
-            // Popula filtro de mercados
             if(select && select.options.length <= 1) {
                 const mercadosUnicos = [...new Set(catalogoDados.map(i => i.mercado))];
                 mercadosUnicos.forEach(m => {
@@ -486,7 +515,7 @@ async function pesquisarPrecos() {
     }
 }
 
-// --- CHAT COM IA (RESTAURADO) ---
+// --- CHAT COM IA (ATUALIZADO PARA VOZ E STATUS) ---
 let unsubscribeChat = null;
 
 async function enviarMensagemGemini() {
@@ -495,13 +524,13 @@ async function enviarMensagemGemini() {
     if (!txt || !currentUser) return;
     
     input.value = ''; 
-    
-    // Adiciona msg do usuário na tela
     renderizarMensagem(txt, 'user');
     
     const idLoad = 'load-' + Date.now();
     const area = document.getElementById('chat-messages');
-    area.innerHTML += `<div id="${idLoad}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Digitando...</div>`;
+    
+    // ATUALIZAÇÃO: Status "Digitando..." com teclado pulsante
+    area.innerHTML += `<div id="${idLoad}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-keyboard fa-pulse"></i> Digitando...</div>`;
     area.scrollTop = area.scrollHeight;
     
     try {
@@ -516,7 +545,6 @@ async function enviarMensagemGemini() {
         // Verifica comando de adicionar ao carrinho
         const comandoAdd = resposta.match(/\|\|ADD:(.*?)\|\|/);
         if (comandoAdd && comandoAdd[1]) {
-            // Formato esperado: Produto :: Preço :: Mercado
             const partes = comandoAdd[1].split('::');
             const prod = partes[0].trim();
             const prec = partes[1] ? parseFloat(partes[1].trim()) : 0;
@@ -524,7 +552,6 @@ async function enviarMensagemGemini() {
             
             adicionarAoCarrinho(prod, prec, merc);
             
-            // Remove o código da resposta visual
             resposta = resposta.replace(comandoAdd[0], "");
         }
         
@@ -561,6 +588,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if(document.getElementById('btn-enviar-chat')) document.getElementById('btn-enviar-chat').addEventListener('click', enviarMensagemGemini);
     if(document.getElementById('btn-pesquisar')) document.getElementById('btn-pesquisar').addEventListener('click', pesquisarPrecos);
     if(document.getElementById('price-form')) document.getElementById('price-form').addEventListener('submit', salvarPreco);
+    
+    // ATUALIZAÇÃO: Injeta botão de microfone dinamicamente
+    const divInput = document.getElementById('chat-input').parentElement;
+    if(divInput && !document.getElementById('btn-mic-chat')) {
+        const btnMic = document.createElement('button');
+        btnMic.id = 'btn-mic-chat';
+        btnMic.className = 'absolute right-12 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white w-9 h-9 rounded-full flex items-center justify-center transition-colors';
+        btnMic.innerHTML = '<i class="fas fa-microphone"></i>';
+        btnMic.onclick = iniciarGravacaoVoz;
+        divInput.appendChild(btnMic);
+    }
     
     // Botão de foto
     const btnFoto = document.getElementById('btn-camera-foto');
@@ -606,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) {} 
     })();
 
-    // LIMPEZA DO CACHE ANTIGO (Remove Service Worker velho se existir)
+    // LIMPEZA DO CACHE ANTIGO
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
             for(let registration of registrations) {
@@ -615,4 +653,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
