@@ -181,7 +181,14 @@ async function enviarMensagemGemini() {
         }
     } catch (e) {
         if(document.getElementById(id)) document.getElementById(id).remove();
-        area.innerHTML += `<div class="chat-ai text-sm mb-2 text-red-400">Erro de conexão.</div>`;
+        
+        // Mensagem amigável em vez de erro técnico
+        area.innerHTML += `
+            <div class="chat-ai text-sm mb-2 border border-red-500/30 bg-red-500/10 p-3 rounded-lg">
+                <p class="font-bold text-red-400 mb-1"><i class="fas fa-exclamation-triangle"></i> Muita gente falando!</p>
+                <p class="text-slate-300">O Kalango tá congestionado agora. Tente usar a aba <b>Buscar</b> ou <b>Catálogo</b> por enquanto, patrão.</p>
+            </div>
+        `;
     }
     area.scrollTop = area.scrollHeight;
 }
@@ -294,3 +301,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
 });
+
