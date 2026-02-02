@@ -501,7 +501,7 @@ async function enviarMensagemGemini() {
     
     const idLoad = 'load-' + Date.now();
     const area = document.getElementById('chat-messages');
-    area.innerHTML += `<div id="${idLoad}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Pensando...</div>`;
+    area.innerHTML += `<div id="${idLoad}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Digitando...</div>`;
     area.scrollTop = area.scrollHeight;
     
     try {
@@ -615,3 +615,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
