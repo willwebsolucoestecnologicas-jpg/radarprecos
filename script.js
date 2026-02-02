@@ -1,6 +1,24 @@
-// script.js - v9.0 (Correção: Ignora preços zerados e valida valores)
+// script.js - v10.0 (Login Google, Histórico Firebase e Correções de Preço)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
+// --- CONFIGURAÇÃO DO FIREBASE (Suas chaves reais) ---
+const firebaseConfig = {
+    apiKey: "AIzaSyCwNVNTZiUJ9qeqniRK9GHDofB9HaQTJ_c",
+    authDomain: "kalango-app.firebaseapp.com",
+    projectId: "kalango-app",
+    storageBucket: "kalango-app.firebasestorage.app",
+    messagingSenderId: "1060554025879",
+    appId: "1:1060554025879:web:c41affa1cd8e8b346172d2",
+    measurementId: "G-SMR42PSTBS"
+};
+
+// INICIALIZA FIREBASE
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// --- VARIÁVEIS GLOBAIS ---
+let currentUser = null;
 let html5QrCode;
 let scannerIsRunning = false;
 let catalogoDados = [];
@@ -9,12 +27,152 @@ let modoScanAtual = 'registrar';
 
 const USUARIOS_VERIFICADOS = ['Will', 'Admin', 'Kalango', 'WillWeb', 'Suporte'];
 
-function gerarSeloUsuario(nome) {
-    if (!nome) return `<span class="text-[9px] text-slate-500 italic">Anônimo</span>`;
-    const isVerificado = USUARIOS_VERIFICADOS.some(u => u.toLowerCase() === nome.toLowerCase());
-    if (isVerificado) return `<span class="text-[9px] text-blue-400 font-bold flex items-center gap-1 bg-blue-400/10 px-1.5 py-0.5 rounded-full border border-blue-400/20"><i class="fas fa-certificate text-[8px]"></i> ${nome}</span>`;
-    return `<span class="text-[9px] text-slate-400 flex items-center gap-1"><i class="fas fa-user text-[8px]"></i> ${nome}</span>`;
+// --- AUTENTICAÇÃO E LOGIN ---
+function fazerLoginGoogle() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).then((result) => {
+        mostrarNotificacao(`Bem-vindo, ${result.user.displayName.split(' ')[0]}!`);
+    }).catch((error) => {
+        console.error(error);
+        mostrarNotificacao("Erro no login. Tente novamente.", "erro");
+    });
 }
+
+// Monitora se o usuário entrou ou saiu
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        currentUser = user;
+        // Esconde tela de login e mostra app
+        document.getElementById('login-screen').classList.add('hidden');
+        
+        // Configura o cabeçalho com foto e nome
+        const profileDiv = document.getElementById('user-profile');
+        if(profileDiv) {
+            profileDiv.classList.remove('hidden');
+            profileDiv.classList.add('flex');
+            document.getElementById('user-name-display').textContent = user.displayName.split(' ')[0];
+            document.getElementById('user-avatar').src = user.photoURL || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+        }
+
+        // Preenche o nome no formulário de registro automaticamente
+        const campoUser = document.getElementById('username');
+        if(campoUser) campoUser.value = user.displayName;
+
+        // Libera botão do carrinho
+        const btnCart = document.getElementById('btn-carrinho-flutuante');
+        if(btnCart && carrinho.length > 0) btnCart.classList.remove('hidden');
+
+        // Carrega o histórico de conversa
+        carregarHistoricoChat(); 
+    } else {
+        currentUser = null;
+        document.getElementById('login-screen').classList.remove('hidden');
+        if(document.getElementById('user-profile')) document.getElementById('user-profile').classList.add('hidden');
+    }
+});
+
+// --- SISTEMA DE CHAT COM HISTÓRICO (FIREBASE) ---
+let unsubscribeChat = null;
+
+function carregarHistoricoChat() {
+    if(!currentUser) return;
+    const chatArea = document.getElementById('chat-messages');
+    chatArea.innerHTML = ''; 
+    
+    // Para de ouvir o chat antigo se houver troca de usuário
+    if(unsubscribeChat) unsubscribeChat();
+
+    // Ouve o banco de dados em tempo real
+    unsubscribeChat = db.collection('chats')
+        .doc(currentUser.uid)
+        .collection('mensagens')
+        .orderBy('timestamp', 'asc')
+        .limit(100)
+        .onSnapshot((snapshot) => {
+            // Limpa e redesenha (ou adiciona novos)
+            const area = document.getElementById('chat-messages');
+            
+            if(snapshot.empty) {
+                area.innerHTML = `<div class="chat-ai text-sm mb-2">Opa, <b>${currentUser.displayName.split(' ')[0]}</b>! 🦎<br>Sou o Kalango. Pode falar o que tu quer comprar que eu monto a lista.</div>`;
+            } else {
+                area.innerHTML = ''; // Limpa para garantir ordem correta (poderia ser otimizado, mas assim é mais seguro)
+                snapshot.forEach((doc) => {
+                    const msg = doc.data();
+                    renderizarMensagem(msg.texto, msg.remetente);
+                });
+            }
+            area.scrollTop = area.scrollHeight;
+        });
+}
+
+function renderizarMensagem(texto, remetente) {
+    const area = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = remetente === 'user' ? "chat-user text-sm mb-2" : "chat-ai text-sm mb-2";
+    div.innerHTML = texto.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    area.appendChild(div);
+}
+
+async function enviarMensagemGemini() {
+    const input = document.getElementById('chat-input');
+    const txt = input.value.trim();
+    if (!txt || !currentUser) return;
+    
+    input.value = ''; // Limpa campo
+    
+    // 1. Salva pergunta do usuário no Firebase
+    try {
+        await db.collection('chats').doc(currentUser.uid).collection('mensagens').add({
+            texto: txt,
+            remetente: 'user',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (e) { console.error("Erro ao salvar msg user", e); }
+
+    // Feedback visual de "Digitando..."
+    const idLoad = 'load-' + Date.now();
+    const area = document.getElementById('chat-messages');
+    area.innerHTML += `<div id="${idLoad}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Pensando...</div>`;
+    area.scrollTop = area.scrollHeight;
+
+    // 2. Envia para IA (Apps Script)
+    try {
+        // Envia o nome do usuário para a IA personalizar a resposta
+        const promptContexto = `[Usuário: ${currentUser.displayName}] ${txt}`;
+        
+        const res = await fetch(`${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(promptContexto)}`, { redirect: 'follow' });
+        const data = await res.json();
+        
+        // Remove o loading (a mensagem real virá pelo onSnapshot do Firebase)
+        if(document.getElementById(idLoad)) document.getElementById(idLoad).remove();
+        
+        let resposta = data.resposta || "Oxe, me perdi aqui. Tenta de novo?";
+        
+        // Processa Comandos de Adicionar ao Carrinho (||ADD: Produto :: Preço :: Mercado||)
+        const comandoAdd = resposta.match(/\|\|ADD:(.*?)\|\|/);
+        if (comandoAdd && comandoAdd[1]) {
+            const partes = comandoAdd[1].split('::');
+            const produto = partes[0] ? partes[0].trim() : "Item";
+            const preco = partes[1] ? parseFloat(partes[1].trim()) : 0;
+            const mercado = partes[2] ? partes[2].trim() : "Via Chat";
+            
+            adicionarAoCarrinho(produto, preco, mercado);
+            resposta = resposta.replace(comandoAdd[0], ""); // Remove o comando visível
+        }
+
+        // 3. Salva resposta da IA no Firebase (Isso aciona o onSnapshot e exibe na tela)
+        await db.collection('chats').doc(currentUser.uid).collection('mensagens').add({
+            texto: resposta,
+            remetente: 'ai',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+    } catch (e) {
+        if(document.getElementById(idLoad)) document.getElementById(idLoad).remove();
+        mostrarNotificacao("Erro de conexão com o Kalango", "erro");
+    }
+}
+
 
 // --- NAVEGAÇÃO ---
 async function trocarAba(aba) {
@@ -28,10 +186,20 @@ async function trocarAba(aba) {
     document.getElementById('nav-' + aba).className = "nav-btn text-emerald-500";
     
     const btnCarrinho = document.getElementById('btn-carrinho-flutuante');
-    if (btnCarrinho) { aba === 'chat' ? btnCarrinho.classList.add('hidden') : btnCarrinho.classList.remove('hidden'); }
+    if (btnCarrinho) { 
+        // Esconde carrinho no chat para não atrapalhar a digitação, mostra nos outros se tiver itens
+        if (aba === 'chat' || carrinho.length === 0) {
+            btnCarrinho.classList.add('hidden');
+        } else {
+            btnCarrinho.classList.remove('hidden');
+        }
+    }
 
     if (aba === 'catalogo') carregarCatalogo();
-    if (aba === 'chat') { const ca = document.getElementById('chat-messages'); setTimeout(() => ca.scrollTop = ca.scrollHeight, 100); }
+    if (aba === 'chat') { 
+        const ca = document.getElementById('chat-messages'); 
+        setTimeout(() => ca.scrollTop = ca.scrollHeight, 100); 
+    }
 }
 
 // --- CARRINHO & MODAL ---
@@ -51,24 +219,39 @@ function toggleCarrinho() {
 function atualizarContadorCarrinho() {
     const count = carrinho.reduce((acc, item) => acc + item.qtd, 0);
     const badge = document.getElementById('cart-count');
-    if(badge) { badge.textContent = count; badge.classList.toggle('hidden', count === 0); }
+    const btnCarrinho = document.getElementById('btn-carrinho-flutuante');
+    
+    if(badge) { 
+        badge.textContent = count; 
+        badge.classList.toggle('hidden', count === 0); 
+    }
+    
+    // Se estiver vazio, esconde o botão (exceto se estiver na aba carrinho, mas ok)
+    if (count === 0 && btnCarrinho) btnCarrinho.classList.add('hidden');
+    else if (count > 0 && btnCarrinho && !document.getElementById('chat-container').classList.contains('hidden') === false) {
+        btnCarrinho.classList.remove('hidden');
+    }
 }
 
 function adicionarAoCarrinho(produto, preco, mercado) {
-    // Garante que preço é número e positivo
     let precoFinal = parseFloat(preco);
-    if (isNaN(precoFinal) || precoFinal < 0) precoFinal = 0;
+    if (isNaN(precoFinal)) precoFinal = 0;
 
     const id = produto + mercado; 
     const existente = carrinho.find(i => i.id === id);
     if (existente) existente.qtd++; else carrinho.push({ id, produto, preco: precoFinal, mercado, qtd: 1 });
+    
     salvarCarrinho();
     
-    if (precoFinal === 0) mostrarNotificacao(`⚠️ ${produto} (Adicionado sem preço)`, "erro");
+    if (precoFinal === 0) mostrarNotificacao(`⚠️ ${produto} (Sem preço)`, "erro");
     else mostrarNotificacao(`+1 ${produto}`);
     
     const btnCart = document.getElementById('btn-carrinho-flutuante');
-    if(btnCart) { btnCart.classList.add('scale-125'); setTimeout(() => btnCart.classList.remove('scale-125'), 200); }
+    if(btnCart) { 
+        btnCart.classList.remove('hidden');
+        btnCart.classList.add('scale-125'); 
+        setTimeout(() => btnCart.classList.remove('scale-125'), 200); 
+    }
 }
 
 function alterarQtd(id, delta) {
@@ -116,7 +299,7 @@ function renderizarCarrinho() {
     totalEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`; totalItemsEl.textContent = `${qtdTotal} itens`;
 }
 
-// --- CÂMERA GLOBAL ---
+// --- CÂMERA E SCANNER ---
 async function iniciarCamera(modo) {
     if (scannerIsRunning) return;
     modoScanAtual = modo;
@@ -130,106 +313,59 @@ async function iniciarCamera(modo) {
         await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess);
     } catch (err) { fecharCamera(); mostrarNotificacao("Erro: Permita a câmera!", "erro"); }
 }
+
 async function fecharCamera() {
     if (html5QrCode && scannerIsRunning) { try { await html5QrCode.stop(); } catch(e) {} scannerIsRunning = false; document.getElementById('reader').innerHTML = ''; }
     document.getElementById('scanner-modal').classList.add('hidden'); document.getElementById('scanner-modal').classList.remove('flex');
 }
+
 async function onScanSuccess(decodedText) {
     fecharCamera();
     if (modoScanAtual === 'pesquisar') {
         trocarAba('consultar'); document.getElementById('ean-busca').value = decodedText; pesquisarPrecos();
     } else {
         trocarAba('registrar'); document.getElementById('registrar-home').classList.add('hidden'); document.getElementById('price-form-section').classList.remove('hidden'); document.getElementById('ean-field').value = decodedText; document.getElementById('product-name').value = "Buscando...";
-        try { const res = await fetch(`${APPS_SCRIPT_URL}?ean=${decodedText}`, { redirect: 'follow' }); const data = await res.json(); document.getElementById('product-name').value = data.nome || ""; if(data.imagem && data.imagem.startsWith('http')) { document.getElementById('image-url-field').value = data.imagem; document.getElementById('preview-imagem').src = data.imagem; document.getElementById('preview-imagem').classList.remove('hidden'); document.getElementById('btn-camera-foto').classList.add('hidden'); } } catch(e) { document.getElementById('product-name').value = ""; }
+        try { 
+            const res = await fetch(`${APPS_SCRIPT_URL}?ean=${decodedText}`, { redirect: 'follow' }); 
+            const data = await res.json(); 
+            document.getElementById('product-name').value = data.nome || ""; 
+            if(data.imagem && data.imagem.startsWith('http')) { 
+                document.getElementById('image-url-field').value = data.imagem; 
+                document.getElementById('preview-imagem').src = data.imagem; 
+                document.getElementById('preview-imagem').classList.remove('hidden'); 
+                document.getElementById('btn-camera-foto').classList.add('hidden'); 
+            } 
+        } catch(e) { document.getElementById('product-name').value = ""; }
     }
 }
 
-async function salvarPreco(e) { e.preventDefault(); const btn = e.target.querySelector('button[type="submit"]'); const txt = btn.innerHTML; btn.innerHTML = '...'; btn.disabled = true; const payload = { ean: document.getElementById('ean-field').value, produto: document.getElementById('product-name').value, preco: document.getElementById('price').value, mercado: document.getElementById('market').value, usuario: document.getElementById('username').value, imagem: document.getElementById('image-url-field').value }; try { await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); mostrarNotificacao("Salvo!"); setTimeout(() => location.reload(), 1500); } catch (err) { mostrarNotificacao("Erro", "erro"); btn.innerHTML = txt; btn.disabled = false; } }
-
-// --- CHAT COM INTELIGÊNCIA REAL (CORREÇÃO DE PREÇO 0) ---
-async function enviarMensagemGemini() {
-    const input = document.getElementById('chat-input');
-    const area = document.getElementById('chat-messages');
-    const txt = input.value.trim();
-    if (!txt) return;
+// --- SALVAR PREÇO (ENVIAR PARA PLANILHA) ---
+async function salvarPreco(e) { 
+    e.preventDefault(); 
+    const btn = e.target.querySelector('button[type="submit"]'); 
+    const txt = btn.innerHTML; 
+    btn.innerHTML = '...'; btn.disabled = true; 
     
-    area.innerHTML += `<div class="chat-user text-sm mb-2">${txt}</div>`;
-    input.value = ''; area.scrollTop = area.scrollHeight;
+    const payload = { 
+        ean: document.getElementById('ean-field').value, 
+        produto: document.getElementById('product-name').value, 
+        preco: document.getElementById('price').value, 
+        mercado: document.getElementById('market').value, 
+        usuario: document.getElementById('username').value, 
+        imagem: document.getElementById('image-url-field').value 
+    }; 
     
-    const id = 'load-' + Date.now();
-    area.innerHTML += `<div id="${id}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Digitando...</div>`;
-    area.scrollTop = area.scrollHeight;
-    
-    try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(txt)}`, { redirect: 'follow' });
-        const data = await res.json();
-        document.getElementById(id).remove();
-        
-        if (data.resposta) {
-            let respostaLimpa = data.resposta;
-            // DETECTA COMANDO
-            const comandoAdd = respostaLimpa.match(/\|\|ADD:(.*?)\|\|/);
-            if (comandoAdd && comandoAdd[1]) {
-                const termo = comandoAdd[1].trim();
-                buscarMelhorPrecoEAdicionar(termo); // CHAMA A BUSCA
-                respostaLimpa = respostaLimpa.replace(comandoAdd[0], "");
-            }
-            const r = respostaLimpa.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-            area.innerHTML += `<div class="chat-ai text-sm mb-2">${r}</div>`;
-        } else {
-            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">Sem resposta.</div>`;
-        }
-    } catch (e) {
-        if(document.getElementById(id)) document.getElementById(id).remove();
-        
-        // Mensagem amigável em vez de erro técnico
-        area.innerHTML += `
-            <div class="chat-ai text-sm mb-2 border border-red-500/30 bg-red-500/10 p-3 rounded-lg">
-                <p class="font-bold text-red-400 mb-1"><i class="fas fa-exclamation-triangle"></i> Muita gente falando!</p>
-                <p class="text-slate-300">O Kalango tá congestionado agora. Tente usar a aba <b>Buscar</b> ou <b>Catálogo</b> por enquanto, patrão.</p>
-            </div>
-        `;
-    }
-    area.scrollTop = area.scrollHeight;
+    try { 
+        await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
+        mostrarNotificacao("Salvo!"); 
+        setTimeout(() => location.reload(), 1500); 
+    } catch (err) { 
+        mostrarNotificacao("Erro", "erro"); 
+        btn.innerHTML = txt; btn.disabled = false; 
+    } 
 }
 
-// BUSCA INTELIGENTE (FILTRO DE ZEROS ADICIONADO)
-async function buscarMelhorPrecoEAdicionar(termo) {
-    mostrarNotificacao(`🔍 Procurando: ${termo}...`);
-    try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?acao=consultarPrecos&ean=${encodeURIComponent(termo)}`, { redirect: 'follow' });
-        const data = await res.json();
-        
-        // AQUI ESTÁ A CORREÇÃO: Filtra apenas itens com preço > 0
-        if (data.resultados && data.resultados.length > 0) {
-            const validos = data.resultados.filter(i => parseFloat(i.preco) > 0);
-            
-            if (validos.length > 0) {
-                // Pega o mais barato que NÃO é zero
-                const melhorOpcao = validos.sort((a, b) => a.preco - b.preco)[0];
-                adicionarAoCarrinho(melhorOpcao.produto, melhorOpcao.preco, melhorOpcao.mercado);
-                const area = document.getElementById('chat-messages');
-                area.innerHTML += `<div class="chat-ai text-sm mb-2 text-emerald-400">✅ Achei! <b>${melhorOpcao.produto}</b> por <b>R$ ${melhorOpcao.preco.toFixed(2)}</b> no ${melhorOpcao.mercado}.</div>`;
-            } else {
-                // Achou o produto, mas todos os preços eram 0
-                adicionarAoCarrinho(termo, 0, "Preço zerado no sistema");
-                const area = document.getElementById('chat-messages');
-                area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">⚠️ Achei o produto "${termo}", mas estava sem preço cadastrado.</div>`;
-            }
-        } else {
-            // Não achou nada
-            adicionarAoCarrinho(termo, 0, "Item não cadastrado");
-            const area = document.getElementById('chat-messages');
-            area.innerHTML += `<div class="chat-ai text-sm mb-2 text-yellow-400">⚠️ Não encontrei "<b>${termo}</b>" no banco, mas adicionei à lista.</div>`;
-        }
-        const area = document.getElementById('chat-messages');
-        area.scrollTop = area.scrollHeight;
-    } catch (e) {
-        adicionarAoCarrinho(termo, 0, "Erro na busca");
-    }
-}
-
-// --- UTILITÁRIOS FINAIS ---
+// --- UTILITÁRIOS E UI ---
 function mostrarNotificacao(msg, tipo = 'sucesso') {
     const t = document.getElementById('toast-notification');
     const m = document.getElementById('toast-message');
@@ -241,12 +377,23 @@ function mostrarNotificacao(msg, tipo = 'sucesso') {
     t.classList.remove('-translate-y-32', 'opacity-0');
     setTimeout(() => { t.classList.add('-translate-y-32', 'opacity-0'); t.classList.remove('pointer-events-auto'); t.classList.add('pointer-events-none'); }, 3000);
 }
+
+function gerarSeloUsuario(nome) {
+    if (!nome) return `<span class="text-[9px] text-slate-500 italic">Anônimo</span>`;
+    const isVerificado = USUARIOS_VERIFICADOS.some(u => u.toLowerCase() === nome.toLowerCase());
+    if (isVerificado) return `<span class="text-[9px] text-blue-400 font-bold flex items-center gap-1 bg-blue-400/10 px-1.5 py-0.5 rounded-full border border-blue-400/20"><i class="fas fa-certificate text-[8px]"></i> ${nome}</span>`;
+    return `<span class="text-[9px] text-slate-400 flex items-center gap-1"><i class="fas fa-user text-[8px]"></i> ${nome}</span>`;
+}
+
 function comprimirImagem(file) { return new Promise((resolve) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (e) => { const img = new Image(); img.src = e.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const scale = 800 / img.width; canvas.width = 800; canvas.height = img.height * scale; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; }; }); }
+
+// --- CATÁLOGO E BUSCA ---
 async function carregarCatalogo() {
     const lista = document.getElementById('lista-catalogo'); const select = document.getElementById('filtro-mercado-catalogo'); if(!lista) return;
     lista.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p>Buscando...</p></div>`;
     try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=listarCatalogo`, { redirect: 'follow' }); const data = await res.json(); if (data.catalogo && data.catalogo.length > 0) { catalogoDados = data.catalogo; atualizarListaCatalogo(catalogoDados); if(select && select.options.length <= 1) { [...new Set(catalogoDados.map(i => i.mercado))].forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); }); } } else { lista.innerHTML = `<div class="text-center py-10 opacity-30"><p>Nada cadastrado.</p></div>`; } } catch (e) { lista.innerHTML = `<div class="text-center py-10 opacity-50"><p>Erro conexão.</p></div>`; }
 }
+
 function atualizarListaCatalogo(dados) {
     const lista = document.getElementById('lista-catalogo'); if(!lista) return; lista.innerHTML = '';
     dados.forEach(item => { 
@@ -267,6 +414,7 @@ function atualizarListaCatalogo(dados) {
         lista.appendChild(div); 
     });
 }
+
 async function pesquisarPrecos() {
     const busca = document.getElementById('ean-busca').value; const container = document.getElementById('resultados-consulta'); const btn = document.getElementById('btn-pesquisar'); if (!busca) return mostrarNotificacao("Digite algo!", "erro");
     const iconOriginal = btn.innerHTML; btn.innerHTML = '<div class="loader w-4 h-4 border-slate-900"></div>'; container.innerHTML = ''; 
@@ -278,13 +426,16 @@ async function pesquisarPrecos() {
         card.innerHTML = `<div class="w-14 h-14 bg-white/5 rounded-xl p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div><div class="flex-1 relative z-10 min-w-0">${eMaisBarato ? `<span class="bg-emerald-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase absolute -top-1 right-0">Só o Ouro</span>` : ''}<h3 class="text-xl font-black ${eMaisBarato ? 'text-emerald-400' : 'text-white'}">R$ ${item.preco.toFixed(2).replace('.', ',')}</h3><p class="font-bold text-xs uppercase text-slate-300 truncate">${item.mercado}</p><div class="mt-1 flex justify-between items-end"><p class="text-[9px] text-slate-500 truncate max-w-[100px]">${item.produto}</p>${gerarSeloUsuario(item.usuario)}</div></div><button onclick="adicionarAoCarrinho('${item.produto.replace(/'/g, "\\'")}', ${item.preco}, '${item.mercado.replace(/'/g, "\\'")}')" class="self-center w-10 h-10 rounded-full bg-slate-700 hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center justify-center transition-colors shadow-lg z-20"><i class="fas fa-cart-plus"></i></button>`; container.appendChild(card); }); } catch (err) { mostrarNotificacao("Erro na busca.", "erro"); btn.innerHTML = iconOriginal; }
 }
 
-// SETUP
+// --- SETUP INICIAL ---
 document.addEventListener('DOMContentLoaded', () => {
     atualizarContadorCarrinho();
+    
+    // Listeners
     const f = document.getElementById('filtro-mercado-catalogo'); if(f) f.addEventListener('change', () => { const v = f.value; if(v === 'todos') atualizarListaCatalogo(catalogoDados); else atualizarListaCatalogo(catalogoDados.filter(i => i.mercado === v)); });
     if(document.getElementById('btn-enviar-chat')) document.getElementById('btn-enviar-chat').addEventListener('click', enviarMensagemGemini);
     if(document.getElementById('btn-pesquisar')) document.getElementById('btn-pesquisar').addEventListener('click', pesquisarPrecos);
     if(document.getElementById('price-form')) document.getElementById('price-form').addEventListener('submit', salvarPreco);
+    
     // Botão de foto
     const btnFoto = document.getElementById('btn-camera-foto');
     const inputFoto = document.getElementById('input-foto-produto');
@@ -299,6 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Carrega mercados para o select
     (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
 });
-
