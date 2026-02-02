@@ -1,4 +1,4 @@
-// script.js - v15.0 (Voz Automática + Saudação + Busca Inteligente)
+// script.js - v15.0
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 // --- FIREBASE ---
@@ -320,3 +320,4 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(registrations) { for(let registration of registrations) { registration.unregister(); } }); }
 });
+
