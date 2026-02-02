@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Kalango - Luís Gomes</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/235/235359.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -180,6 +187,17 @@
         <button id="nav-catalogo" class="nav-btn text-slate-500" onclick="trocarAba('catalogo')"><i class="fas fa-list"></i><span>Catálogo</span></button>
         <button id="nav-chat" class="nav-btn text-slate-500" onclick="trocarAba('chat')"><i class="fas fa-robot"></i><span>Kalango</span></button>
     </nav>
+    
     <script src="script.js"></script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Kalango instalado!', reg.scope))
+                    .catch(err => console.log('Erro ao instalar:', err));
+            });
+        }
+    </script>
 </body>
 </html>
