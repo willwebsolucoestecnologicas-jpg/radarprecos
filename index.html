@@ -7,6 +7,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; -webkit-tap-highlight-color: transparent; }
@@ -21,38 +26,47 @@
 </head>
 <body class="h-[100dvh] flex flex-col overflow-hidden bg-[#0f172a]">
 
+    <div id="login-screen" class="fixed inset-0 z-[200] bg-[#0f172a] flex flex-col items-center justify-center p-6 text-center transition-all duration-500">
+        <div class="w-32 h-32 bg-emerald-500/10 rounded-full flex items-center justify-center mb-6 animate-pulse">
+            <span class="text-6xl">🦎</span>
+        </div>
+        <h1 class="text-3xl font-black text-white mb-2">KALANGO</h1>
+        <p class="text-slate-400 mb-10">O fiscal de preços de Luís Gomes.</p>
+        
+        <button onclick="fazerLoginGoogle()" class="w-full max-w-xs bg-white text-slate-900 font-bold py-4 rounded-xl flex items-center justify-center gap-3 shadow-xl hover:bg-slate-100 transition-colors">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-6 h-6">
+            Entrar com Google
+        </button>
+        <p class="text-[10px] text-slate-500 mt-6">Versão 10.0 • Seguro e Privado</p>
+    </div>
+
     <div id="toast-notification" class="fixed top-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-5 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 font-bold transition-all duration-300 -translate-y-32 opacity-0 whitespace-nowrap pointer-events-none">
         <i class="fas fa-check"></i> <span id="toast-message"></span>
     </div>
 
     <div id="confirm-modal" class="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-6">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <div class="text-center mb-6">
-                <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-3xl">
-                    <i class="fas fa-trash-alt"></i>
-                </div>
+                <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-3xl"><i class="fas fa-trash-alt"></i></div>
                 <h3 class="text-xl font-bold text-white mb-2">Limpar tudo?</h3>
-                <p class="text-slate-400 text-sm">Você vai apagar todos os itens da sua lista de compras.</p>
+                <p class="text-slate-400 text-sm">Apagar itens da lista?</p>
             </div>
             <div class="flex gap-3">
-                <button onclick="fecharModalConfirmacao()" class="flex-1 py-3 rounded-xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors">Cancelar</button>
-                <button onclick="confirmarLimpeza()" class="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-900/20 transition-colors">Apagar</button>
+                <button onclick="fecharModalConfirmacao()" class="flex-1 py-3 rounded-xl font-bold text-slate-300 bg-slate-800">Cancelar</button>
+                <button onclick="confirmarLimpeza()" class="flex-1 py-3 rounded-xl font-bold text-white bg-red-600">Apagar</button>
             </div>
         </div>
     </div>
 
     <div id="scanner-modal" class="fixed inset-0 z-[70] bg-black hidden flex-col">
         <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
-            <h2 id="scanner-title" class="text-white font-bold text-lg drop-shadow-md">Escanear</h2>
-            <button onclick="fecharCamera()" class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-md"><i class="fas fa-times"></i></button>
+            <h2 id="scanner-title" class="text-white font-bold text-lg">Escanear</h2>
+            <button onclick="fecharCamera()" class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center"><i class="fas fa-times"></i></button>
         </div>
         <div id="reader" class="flex-1 relative"></div>
-        <div class="absolute bottom-10 left-0 w-full text-center z-20 pointer-events-none">
-            <p class="text-white/80 text-xs bg-black/50 inline-block px-3 py-1 rounded-full backdrop-blur-sm">Aponte para o código de barras</p>
-        </div>
     </div>
 
-    <button id="btn-carrinho-flutuante" onclick="toggleCarrinho()" class="fixed bottom-24 right-4 bg-emerald-500 hover:bg-emerald-400 text-slate-900 w-14 h-14 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.4)] z-40 flex items-center justify-center transition-transform active:scale-90 animate-bounce-slow">
+    <button id="btn-carrinho-flutuante" onclick="toggleCarrinho()" class="fixed bottom-24 right-4 bg-emerald-500 hover:bg-emerald-400 text-slate-900 w-14 h-14 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.4)] z-40 flex items-center justify-center transition-transform active:scale-90 animate-bounce-slow hidden">
         <div class="relative">
             <i class="fas fa-shopping-basket text-xl"></i>
             <span id="cart-count" class="absolute -top-3 -right-3 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#0f172a] hidden">0</span>
@@ -88,7 +102,10 @@
                 <p class="text-[10px] text-emerald-500 font-bold tracking-widest uppercase">Luís Gomes • RN</p>
             </div>
         </div>
-        <div class="bg-slate-800 px-2 py-1 rounded text-[10px] text-slate-500 font-mono">v9.1</div>
+        <div id="user-profile" class="hidden items-center gap-2 bg-slate-800 pl-2 pr-1 py-1 rounded-full border border-slate-700">
+            <span id="user-name-display" class="text-[10px] font-bold text-slate-300 max-w-[60px] truncate text-right">Visitante</span>
+            <img id="user-avatar" src="" class="w-6 h-6 rounded-full bg-slate-600">
+        </div>
     </header>
 
     <main class="flex-1 overflow-y-auto relative scroll-smooth bg-[#0f172a]" id="main-content">
@@ -116,7 +133,7 @@
                             <div class="space-y-1"><label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Preço (R$)</label><input type="number" id="price" step="0.01" class="w-full bg-slate-900 border border-slate-700 text-white text-lg font-bold rounded-xl px-4 py-3 focus:border-emerald-500 outline-none" placeholder="0.00" required></div>
                             <div class="space-y-1"><label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Mercado</label><select id="market" class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-3 py-3 outline-none"><option>Carregando...</option></select></div>
                         </div>
-                        <div class="space-y-1"><label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Quem envia?</label><input type="text" id="username" class="w-full bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl px-4 py-3 outline-none focus:border-emerald-500" placeholder="Seu nome (Opcional)"></div>
+                        <div class="space-y-1"><label class="text-[10px] text-slate-400 font-bold uppercase ml-1">Quem envia?</label><input type="text" id="username" class="w-full bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl px-4 py-3 outline-none focus:border-emerald-500" placeholder="Seu nome" readonly></div>
                         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl mt-2 shadow-lg shadow-emerald-900/20 active:scale-95 transition-all text-sm uppercase tracking-wide"><i class="fas fa-check-circle mr-2"></i> Salvar Preço</button>
                     </form>
                 </div>
@@ -147,11 +164,7 @@
 
         <div id="chat-container" class="hidden h-full relative">
             <div id="chat-messages" class="absolute top-0 left-0 w-full h-full overflow-y-auto p-4 pb-40 space-y-3">
-                <div class="chat-ai text-sm">
-                    Opa! O <b>Kalango</b> tá on 🦎⚡<br>
-                    Tô com os preços de Luís Gomes na ponta da língua. Bora economizar?
                 </div>
-            </div>
             <div class="fixed bottom-[85px] left-0 w-full px-4 z-50 pointer-events-auto">
                 <div class="relative shadow-2xl bg-[#0f172a] rounded-full p-1 border border-slate-700/50">
                     <input type="text" id="chat-input" class="w-full bg-slate-800 border border-slate-600 text-white rounded-full pl-5 pr-12 py-3.5 focus:border-emerald-500 outline-none text-sm placeholder-slate-500" placeholder="Fale com o Kalango...">
