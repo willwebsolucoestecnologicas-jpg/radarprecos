@@ -1,4 +1,4 @@
-// script.js - v10.0 (Login Google, Histórico Firebase e Correções de Preço)
+// script.js - v10.1 (Correção de Login Mobile + Debug)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 // --- CONFIGURAÇÃO DO FIREBASE (Suas chaves reais) ---
@@ -27,27 +27,36 @@ let modoScanAtual = 'registrar';
 
 const USUARIOS_VERIFICADOS = ['Will', 'Admin', 'Kalango', 'WillWeb', 'Suporte'];
 
-// --- AUTENTICAÇÃO E LOGIN ---
+// --- AUTENTICAÇÃO E LOGIN (ATUALIZADO) ---
+
+// 1. Função de Login com Persistência Forçada
 function fazerLoginGoogle() {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    // Mudamos de .signInWithPopup (que trava no celular) para .signInWithRedirect
-    auth.signInWithRedirect(provider);
+    // Força a persistência LOCAL antes de redirecionar para garantir que o celular salve a sessão
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+        .then(() => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            return auth.signInWithRedirect(provider);
+        })
+        .catch((error) => {
+            console.error("Erro ao iniciar login:", error);
+            mostrarNotificacao("Erro ao iniciar: " + error.message, "erro");
+        });
 }
 
-// Verifica se voltou do login com erro
+// 2. Detetive de Retorno (Verifica erros quando volta do Google)
 auth.getRedirectResult()
     .then((result) => {
         if (result.user) {
-            mostrarNotificacao(`Bem-vindo, ${result.user.displayName.split(' ')[0]}!`);
+            mostrarNotificacao(`Login Confirmado: ${result.user.displayName.split(' ')[0]}`);
+        } else {
+            console.log("Nenhum retorno de login processado nesta carga.");
         }
     })
     .catch((error) => {
-        console.error(error);
-        if (error.code === 'auth/unauthorized-domain') {
-            mostrarNotificacao("Erro: Domínio não autorizado no Firebase", "erro");
-        } else {
-            mostrarNotificacao("Erro no login. Tente novamente.", "erro");
-        }
+        console.error("ERRO NO LOGIN (REDIRECT):", error);
+        // ALERTA VISUAL PARA DEBUG (Vai aparecer na tela do celular)
+        alert("ERRO NO LOGIN:\nCódigo: " + error.code + "\nMensagem: " + error.message);
+        mostrarNotificacao("Falha no Login. Veja o alerta.", "erro");
     });
 
 // Monitora se o usuário entrou ou saiu
@@ -466,4 +475,3 @@ document.addEventListener('DOMContentLoaded', () => {
     // Carrega mercados para o select
     (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
 });
-
