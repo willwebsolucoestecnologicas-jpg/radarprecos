@@ -1,7 +1,7 @@
-// script.js - v10.1 (Correção de Login Mobile + Debug)
+// script.js - v11.0 (Login via Pop-up + Limpeza de Cache SW)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
-// --- CONFIGURAÇÃO DO FIREBASE (Suas chaves reais) ---
+// --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyCwNVNTZiUJ9qeqniRK9GHDofB9HaQTJ_c",
     authDomain: "kalango-app.firebaseapp.com",
@@ -27,37 +27,48 @@ let modoScanAtual = 'registrar';
 
 const USUARIOS_VERIFICADOS = ['Will', 'Admin', 'Kalango', 'WillWeb', 'Suporte'];
 
-// --- AUTENTICAÇÃO E LOGIN (ATUALIZADO) ---
-
-// 1. Função de Login com Persistência Forçada
+// --- AUTENTICAÇÃO ROBUSTA (MUDANÇA AQUI: POP-UP) ---
 function fazerLoginGoogle() {
-    // Força a persistência LOCAL antes de redirecionar para garantir que o celular salve a sessão
+    const provider = new firebase.auth.GoogleAuthProvider();
+    
+    // Feedback visual para o usuário saber que algo está acontecendo
+    const btn = document.querySelector('button[onclick="fazerLoginGoogle()"]');
+    if(btn) {
+        const textoOriginal = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Carregando...';
+        btn.disabled = true;
+    }
+
+    // Força persistência LOCAL e abre POP-UP (Mais estável em celulares)
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
         .then(() => {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            return auth.signInWithRedirect(provider);
+            return auth.signInWithPopup(provider);
+        })
+        .then((result) => {
+            // Sucesso! O onAuthStateChanged vai cuidar do resto
+            mostrarNotificacao(`Bem-vindo, ${result.user.displayName.split(' ')[0]}!`);
         })
         .catch((error) => {
-            console.error("Erro ao iniciar login:", error);
-            mostrarNotificacao("Erro ao iniciar: " + error.message, "erro");
+            console.error("Erro Login:", error);
+            
+            // Devolve o botão ao normal em caso de erro
+            if(btn) {
+                btn.innerHTML = '<img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-6 h-6"> Tentar Novamente';
+                btn.disabled = false;
+            }
+
+            // Tratamento de erros específicos
+            if (error.code === 'auth/popup-blocked') {
+                alert("Opa! Seu navegador bloqueou o login.\n\nPor favor, permita 'Pop-ups' para este site nas configurações do navegador.");
+            } else if (error.code === 'auth/popup-closed-by-user') {
+                mostrarNotificacao("Login cancelado.", "erro");
+            } else if (error.code === 'auth/unauthorized-domain') {
+                alert("Erro de Domínio: O Firebase não reconhece este site.\nVerifique 'Domínios Autorizados' no console.");
+            } else {
+                alert("Erro ao entrar: " + error.message);
+            }
         });
 }
-
-// 2. Detetive de Retorno (Verifica erros quando volta do Google)
-auth.getRedirectResult()
-    .then((result) => {
-        if (result.user) {
-            mostrarNotificacao(`Login Confirmado: ${result.user.displayName.split(' ')[0]}`);
-        } else {
-            console.log("Nenhum retorno de login processado nesta carga.");
-        }
-    })
-    .catch((error) => {
-        console.error("ERRO NO LOGIN (REDIRECT):", error);
-        // ALERTA VISUAL PARA DEBUG (Vai aparecer na tela do celular)
-        alert("ERRO NO LOGIN:\nCódigo: " + error.code + "\nMensagem: " + error.message);
-        mostrarNotificacao("Falha no Login. Veja o alerta.", "erro");
-    });
 
 // Monitora se o usuário entrou ou saiu
 auth.onAuthStateChanged((user) => {
@@ -79,7 +90,7 @@ auth.onAuthStateChanged((user) => {
         const campoUser = document.getElementById('username');
         if(campoUser) campoUser.value = user.displayName;
 
-        // Libera botão do carrinho
+        // Libera botão do carrinho se tiver itens
         const btnCart = document.getElementById('btn-carrinho-flutuante');
         if(btnCart && carrinho.length > 0) btnCart.classList.remove('hidden');
 
@@ -92,7 +103,7 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-// --- SISTEMA DE CHAT COM HISTÓRICO (FIREBASE) ---
+// --- SISTEMA DE CHAT COM HISTÓRICO ---
 let unsubscribeChat = null;
 
 function carregarHistoricoChat() {
@@ -100,23 +111,20 @@ function carregarHistoricoChat() {
     const chatArea = document.getElementById('chat-messages');
     chatArea.innerHTML = ''; 
     
-    // Para de ouvir o chat antigo se houver troca de usuário
     if(unsubscribeChat) unsubscribeChat();
 
-    // Ouve o banco de dados em tempo real
     unsubscribeChat = db.collection('chats')
         .doc(currentUser.uid)
         .collection('mensagens')
         .orderBy('timestamp', 'asc')
         .limit(100)
         .onSnapshot((snapshot) => {
-            // Limpa e redesenha (ou adiciona novos)
             const area = document.getElementById('chat-messages');
             
             if(snapshot.empty) {
                 area.innerHTML = `<div class="chat-ai text-sm mb-2">Opa, <b>${currentUser.displayName.split(' ')[0]}</b>! 🦎<br>Sou o Kalango. Pode falar o que tu quer comprar que eu monto a lista.</div>`;
             } else {
-                area.innerHTML = ''; // Limpa para garantir ordem correta (poderia ser otimizado, mas assim é mais seguro)
+                area.innerHTML = ''; 
                 snapshot.forEach((doc) => {
                     const msg = doc.data();
                     renderizarMensagem(msg.texto, msg.remetente);
@@ -139,9 +147,9 @@ async function enviarMensagemGemini() {
     const txt = input.value.trim();
     if (!txt || !currentUser) return;
     
-    input.value = ''; // Limpa campo
+    input.value = ''; 
     
-    // 1. Salva pergunta do usuário no Firebase
+    // 1. Salva pergunta do usuário
     try {
         await db.collection('chats').doc(currentUser.uid).collection('mensagens').add({
             texto: txt,
@@ -150,38 +158,33 @@ async function enviarMensagemGemini() {
         });
     } catch (e) { console.error("Erro ao salvar msg user", e); }
 
-    // Feedback visual de "Digitando..."
     const idLoad = 'load-' + Date.now();
     const area = document.getElementById('chat-messages');
     area.innerHTML += `<div id="${idLoad}" class="chat-ai text-sm mb-2 opacity-50"><i class="fas fa-circle-notch fa-spin"></i> Pensando...</div>`;
     area.scrollTop = area.scrollHeight;
 
-    // 2. Envia para IA (Apps Script)
+    // 2. Envia para IA
     try {
-        // Envia o nome do usuário para a IA personalizar a resposta
         const promptContexto = `[Usuário: ${currentUser.displayName}] ${txt}`;
-        
         const res = await fetch(`${APPS_SCRIPT_URL}?acao=chatGemini&pergunta=${encodeURIComponent(promptContexto)}`, { redirect: 'follow' });
         const data = await res.json();
         
-        // Remove o loading (a mensagem real virá pelo onSnapshot do Firebase)
         if(document.getElementById(idLoad)) document.getElementById(idLoad).remove();
         
         let resposta = data.resposta || "Oxe, me perdi aqui. Tenta de novo?";
         
-        // Processa Comandos de Adicionar ao Carrinho (||ADD: Produto :: Preço :: Mercado||)
+        // Processa Comandos de Carrinho
         const comandoAdd = resposta.match(/\|\|ADD:(.*?)\|\|/);
         if (comandoAdd && comandoAdd[1]) {
             const partes = comandoAdd[1].split('::');
             const produto = partes[0] ? partes[0].trim() : "Item";
             const preco = partes[1] ? parseFloat(partes[1].trim()) : 0;
             const mercado = partes[2] ? partes[2].trim() : "Via Chat";
-            
             adicionarAoCarrinho(produto, preco, mercado);
-            resposta = resposta.replace(comandoAdd[0], ""); // Remove o comando visível
+            resposta = resposta.replace(comandoAdd[0], "");
         }
 
-        // 3. Salva resposta da IA no Firebase (Isso aciona o onSnapshot e exibe na tela)
+        // 3. Salva resposta da IA
         await db.collection('chats').doc(currentUser.uid).collection('mensagens').add({
             texto: resposta,
             remetente: 'ai',
@@ -193,7 +196,6 @@ async function enviarMensagemGemini() {
         mostrarNotificacao("Erro de conexão com o Kalango", "erro");
     }
 }
-
 
 // --- NAVEGAÇÃO ---
 async function trocarAba(aba) {
@@ -208,7 +210,6 @@ async function trocarAba(aba) {
     
     const btnCarrinho = document.getElementById('btn-carrinho-flutuante');
     if (btnCarrinho) { 
-        // Esconde carrinho no chat para não atrapalhar a digitação, mostra nos outros se tiver itens
         if (aba === 'chat' || carrinho.length === 0) {
             btnCarrinho.classList.add('hidden');
         } else {
@@ -241,13 +242,7 @@ function atualizarContadorCarrinho() {
     const count = carrinho.reduce((acc, item) => acc + item.qtd, 0);
     const badge = document.getElementById('cart-count');
     const btnCarrinho = document.getElementById('btn-carrinho-flutuante');
-    
-    if(badge) { 
-        badge.textContent = count; 
-        badge.classList.toggle('hidden', count === 0); 
-    }
-    
-    // Se estiver vazio, esconde o botão (exceto se estiver na aba carrinho, mas ok)
+    if(badge) { badge.textContent = count; badge.classList.toggle('hidden', count === 0); }
     if (count === 0 && btnCarrinho) btnCarrinho.classList.add('hidden');
     else if (count > 0 && btnCarrinho && !document.getElementById('chat-container').classList.contains('hidden') === false) {
         btnCarrinho.classList.remove('hidden');
@@ -257,22 +252,14 @@ function atualizarContadorCarrinho() {
 function adicionarAoCarrinho(produto, preco, mercado) {
     let precoFinal = parseFloat(preco);
     if (isNaN(precoFinal)) precoFinal = 0;
-
     const id = produto + mercado; 
     const existente = carrinho.find(i => i.id === id);
     if (existente) existente.qtd++; else carrinho.push({ id, produto, preco: precoFinal, mercado, qtd: 1 });
-    
     salvarCarrinho();
-    
     if (precoFinal === 0) mostrarNotificacao(`⚠️ ${produto} (Sem preço)`, "erro");
     else mostrarNotificacao(`+1 ${produto}`);
-    
     const btnCart = document.getElementById('btn-carrinho-flutuante');
-    if(btnCart) { 
-        btnCart.classList.remove('hidden');
-        btnCart.classList.add('scale-125'); 
-        setTimeout(() => btnCart.classList.remove('scale-125'), 200); 
-    }
+    if(btnCart) { btnCart.classList.remove('hidden'); btnCart.classList.add('scale-125'); setTimeout(() => btnCart.classList.remove('scale-125'), 200); }
 }
 
 function alterarQtd(id, delta) {
@@ -304,17 +291,8 @@ function renderizarCarrinho() {
         const div = document.createElement('div');
         div.className = "flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700 mb-2";
         div.innerHTML = `
-            <div class="flex-1 min-w-0 pr-2">
-                <h4 class="text-sm font-bold text-white line-clamp-1">${item.produto}</h4>
-                <p class="text-[10px] text-slate-400">${item.mercado}</p>
-                <p class="text-xs text-emerald-400 font-bold mt-1">Total: R$ ${(item.preco * item.qtd).toFixed(2)}</p>
-            </div>
-            <div class="flex items-center gap-3 bg-slate-900 rounded-lg p-1 border border-slate-700">
-                <button onclick="alterarQtd('${item.id}', -1)" class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-slate-800 rounded font-bold">-</button>
-                <span class="text-sm font-bold text-white w-4 text-center">${item.qtd}</span>
-                <button onclick="alterarQtd('${item.id}', 1)" class="w-8 h-8 flex items-center justify-center text-emerald-400 hover:bg-slate-800 rounded font-bold">+</button>
-            </div>
-        `;
+            <div class="flex-1 min-w-0 pr-2"><h4 class="text-sm font-bold text-white line-clamp-1">${item.produto}</h4><p class="text-[10px] text-slate-400">${item.mercado}</p><p class="text-xs text-emerald-400 font-bold mt-1">Total: R$ ${(item.preco * item.qtd).toFixed(2)}</p></div>
+            <div class="flex items-center gap-3 bg-slate-900 rounded-lg p-1 border border-slate-700"><button onclick="alterarQtd('${item.id}', -1)" class="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-slate-800 rounded font-bold">-</button><span class="text-sm font-bold text-white w-4 text-center">${item.qtd}</span><button onclick="alterarQtd('${item.id}', 1)" class="w-8 h-8 flex items-center justify-center text-emerald-400 hover:bg-slate-800 rounded font-bold">+</button></div>`;
         container.appendChild(div);
     });
     totalEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`; totalItemsEl.textContent = `${qtdTotal} itens`;
@@ -360,33 +338,17 @@ async function onScanSuccess(decodedText) {
     }
 }
 
-// --- SALVAR PREÇO (ENVIAR PARA PLANILHA) ---
+// --- SALVAR PREÇO ---
 async function salvarPreco(e) { 
     e.preventDefault(); 
     const btn = e.target.querySelector('button[type="submit"]'); 
     const txt = btn.innerHTML; 
     btn.innerHTML = '...'; btn.disabled = true; 
-    
-    const payload = { 
-        ean: document.getElementById('ean-field').value, 
-        produto: document.getElementById('product-name').value, 
-        preco: document.getElementById('price').value, 
-        mercado: document.getElementById('market').value, 
-        usuario: document.getElementById('username').value, 
-        imagem: document.getElementById('image-url-field').value 
-    }; 
-    
-    try { 
-        await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
-        mostrarNotificacao("Salvo!"); 
-        setTimeout(() => location.reload(), 1500); 
-    } catch (err) { 
-        mostrarNotificacao("Erro", "erro"); 
-        btn.innerHTML = txt; btn.disabled = false; 
-    } 
+    const payload = { ean: document.getElementById('ean-field').value, produto: document.getElementById('product-name').value, preco: document.getElementById('price').value, mercado: document.getElementById('market').value, usuario: document.getElementById('username').value, imagem: document.getElementById('image-url-field').value }; 
+    try { await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); mostrarNotificacao("Salvo!"); setTimeout(() => location.reload(), 1500); } catch (err) { mostrarNotificacao("Erro", "erro"); btn.innerHTML = txt; btn.disabled = false; } 
 }
 
-// --- UTILITÁRIOS E UI ---
+// --- UI HELPERS ---
 function mostrarNotificacao(msg, tipo = 'sucesso') {
     const t = document.getElementById('toast-notification');
     const m = document.getElementById('toast-message');
@@ -402,76 +364,50 @@ function mostrarNotificacao(msg, tipo = 'sucesso') {
 function gerarSeloUsuario(nome) {
     if (!nome) return `<span class="text-[9px] text-slate-500 italic">Anônimo</span>`;
     const isVerificado = USUARIOS_VERIFICADOS.some(u => u.toLowerCase() === nome.toLowerCase());
-    if (isVerificado) return `<span class="text-[9px] text-blue-400 font-bold flex items-center gap-1 bg-blue-400/10 px-1.5 py-0.5 rounded-full border border-blue-400/20"><i class="fas fa-certificate text-[8px]"></i> ${nome}</span>`;
-    return `<span class="text-[9px] text-slate-400 flex items-center gap-1"><i class="fas fa-user text-[8px]"></i> ${nome}</span>`;
+    return isVerificado ? `<span class="text-[9px] text-blue-400 font-bold flex items-center gap-1 bg-blue-400/10 px-1.5 py-0.5 rounded-full border border-blue-400/20"><i class="fas fa-certificate text-[8px]"></i> ${nome}</span>` : `<span class="text-[9px] text-slate-400 flex items-center gap-1"><i class="fas fa-user text-[8px]"></i> ${nome}</span>`;
 }
 
 function comprimirImagem(file) { return new Promise((resolve) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (e) => { const img = new Image(); img.src = e.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const scale = 800 / img.width; canvas.width = 800; canvas.height = img.height * scale; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; }; }); }
 
-// --- CATÁLOGO E BUSCA ---
+// --- CATÁLOGO ---
 async function carregarCatalogo() {
     const lista = document.getElementById('lista-catalogo'); const select = document.getElementById('filtro-mercado-catalogo'); if(!lista) return;
     lista.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fas fa-spinner fa-spin text-2xl"></i><p>Buscando...</p></div>`;
     try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=listarCatalogo`, { redirect: 'follow' }); const data = await res.json(); if (data.catalogo && data.catalogo.length > 0) { catalogoDados = data.catalogo; atualizarListaCatalogo(catalogoDados); if(select && select.options.length <= 1) { [...new Set(catalogoDados.map(i => i.mercado))].forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); }); } } else { lista.innerHTML = `<div class="text-center py-10 opacity-30"><p>Nada cadastrado.</p></div>`; } } catch (e) { lista.innerHTML = `<div class="text-center py-10 opacity-50"><p>Erro conexão.</p></div>`; }
 }
-
 function atualizarListaCatalogo(dados) {
     const lista = document.getElementById('lista-catalogo'); if(!lista) return; lista.innerHTML = '';
     dados.forEach(item => { 
         const img = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png"; 
-        const div = document.createElement('div'); 
-        div.className = "bg-slate-800 border border-slate-700 p-3 rounded-xl flex gap-3 items-center shadow-sm mb-3"; 
-        div.innerHTML = `
-            <div class="w-12 h-12 bg-white/5 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div>
-            <div class="flex-1 min-w-0">
-                <h4 class="text-xs font-bold text-white truncate">${item.produto}</h4>
-                <div class="flex justify-between items-end mt-1">
-                    <div><span class="text-emerald-400 font-black text-sm block">R$ ${item.preco.toFixed(2).replace('.', ',')}</span><span class="text-[9px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded truncate max-w-[80px] inline-block">${item.mercado}</span></div>
-                    <div class="text-right">${gerarSeloUsuario(item.usuario)}</div>
-                </div>
-            </div>
-            <button onclick="adicionarAoCarrinho('${item.produto.replace(/'/g, "\\'")}', ${item.preco}, '${item.mercado.replace(/'/g, "\\'")}')" class="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors"><i class="fas fa-plus"></i></button>
-        `; 
-        lista.appendChild(div); 
+        const div = document.createElement('div'); div.className = "bg-slate-800 border border-slate-700 p-3 rounded-xl flex gap-3 items-center shadow-sm mb-3"; 
+        div.innerHTML = `<div class="w-12 h-12 bg-white/5 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div><div class="flex-1 min-w-0"><h4 class="text-xs font-bold text-white truncate">${item.produto}</h4><div class="flex justify-between items-end mt-1"><div><span class="text-emerald-400 font-black text-sm block">R$ ${item.preco.toFixed(2).replace('.', ',')}</span><span class="text-[9px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded truncate max-w-[80px] inline-block">${item.mercado}</span></div><div class="text-right">${gerarSeloUsuario(item.usuario)}</div></div></div><button onclick="adicionarAoCarrinho('${item.produto.replace(/'/g, "\\'")}', ${item.preco}, '${item.mercado.replace(/'/g, "\\'")}')" class="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors"><i class="fas fa-plus"></i></button>`; lista.appendChild(div); 
     });
 }
-
 async function pesquisarPrecos() {
     const busca = document.getElementById('ean-busca').value; const container = document.getElementById('resultados-consulta'); const btn = document.getElementById('btn-pesquisar'); if (!busca) return mostrarNotificacao("Digite algo!", "erro");
     const iconOriginal = btn.innerHTML; btn.innerHTML = '<div class="loader w-4 h-4 border-slate-900"></div>'; container.innerHTML = ''; 
     try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=consultarPrecos&ean=${encodeURIComponent(busca)}`, { redirect: 'follow' }); const data = await res.json(); btn.innerHTML = iconOriginal; if (!data.resultados || data.resultados.length === 0) { container.innerHTML = `<div class="text-center py-8 opacity-50 bg-slate-800 rounded-xl"><p>Não achei nada.</p></div>`; return; } 
     const lista = data.resultados.sort((a, b) => a.preco - b.preco); const h = document.createElement('div'); h.className = "mb-4 bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20"; h.innerHTML = `<h3 class="text-sm font-bold text-emerald-400">Resultados para "${busca}"</h3>`; container.appendChild(h); 
-    lista.forEach((item, index) => { 
-        const eMaisBarato = index === 0; const img = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png"; 
-        const card = document.createElement('div'); card.className = `p-4 rounded-2xl mb-3 relative overflow-hidden flex gap-3 ${eMaisBarato ? 'bg-gradient-to-br from-emerald-900 to-slate-800 border border-emerald-500 shadow-lg' : 'bg-slate-800 border border-slate-700'}`; 
-        card.innerHTML = `<div class="w-14 h-14 bg-white/5 rounded-xl p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div><div class="flex-1 relative z-10 min-w-0">${eMaisBarato ? `<span class="bg-emerald-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase absolute -top-1 right-0">Só o Ouro</span>` : ''}<h3 class="text-xl font-black ${eMaisBarato ? 'text-emerald-400' : 'text-white'}">R$ ${item.preco.toFixed(2).replace('.', ',')}</h3><p class="font-bold text-xs uppercase text-slate-300 truncate">${item.mercado}</p><div class="mt-1 flex justify-between items-end"><p class="text-[9px] text-slate-500 truncate max-w-[100px]">${item.produto}</p>${gerarSeloUsuario(item.usuario)}</div></div><button onclick="adicionarAoCarrinho('${item.produto.replace(/'/g, "\\'")}', ${item.preco}, '${item.mercado.replace(/'/g, "\\'")}')" class="self-center w-10 h-10 rounded-full bg-slate-700 hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center justify-center transition-colors shadow-lg z-20"><i class="fas fa-cart-plus"></i></button>`; container.appendChild(card); }); } catch (err) { mostrarNotificacao("Erro na busca.", "erro"); btn.innerHTML = iconOriginal; }
+    lista.forEach((item, index) => { const eMaisBarato = index === 0; const img = (item.imagem && item.imagem.length > 10) ? item.imagem : "https://cdn-icons-png.flaticon.com/512/2748/2748558.png"; const card = document.createElement('div'); card.className = `p-4 rounded-2xl mb-3 relative overflow-hidden flex gap-3 ${eMaisBarato ? 'bg-gradient-to-br from-emerald-900 to-slate-800 border border-emerald-500 shadow-lg' : 'bg-slate-800 border border-slate-700'}`; card.innerHTML = `<div class="w-14 h-14 bg-white/5 rounded-xl p-1 flex-shrink-0 flex items-center justify-center"><img src="${img}" class="max-w-full max-h-full object-contain"></div><div class="flex-1 relative z-10 min-w-0">${eMaisBarato ? `<span class="bg-emerald-500 text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase absolute -top-1 right-0">Só o Ouro</span>` : ''}<h3 class="text-xl font-black ${eMaisBarato ? 'text-emerald-400' : 'text-white'}">R$ ${item.preco.toFixed(2).replace('.', ',')}</h3><p class="font-bold text-xs uppercase text-slate-300 truncate">${item.mercado}</p><div class="mt-1 flex justify-between items-end"><p class="text-[9px] text-slate-500 truncate max-w-[100px]">${item.produto}</p>${gerarSeloUsuario(item.usuario)}</div></div><button onclick="adicionarAoCarrinho('${item.produto.replace(/'/g, "\\'")}', ${item.preco}, '${item.mercado.replace(/'/g, "\\'")}')" class="self-center w-10 h-10 rounded-full bg-slate-700 hover:bg-emerald-500 hover:text-white text-emerald-500 flex items-center justify-center transition-colors shadow-lg z-20"><i class="fas fa-cart-plus"></i></button>`; container.appendChild(card); }); } catch (err) { mostrarNotificacao("Erro na busca.", "erro"); btn.innerHTML = iconOriginal; }
 }
 
-// --- SETUP INICIAL ---
 document.addEventListener('DOMContentLoaded', () => {
     atualizarContadorCarrinho();
-    
-    // Listeners
     const f = document.getElementById('filtro-mercado-catalogo'); if(f) f.addEventListener('change', () => { const v = f.value; if(v === 'todos') atualizarListaCatalogo(catalogoDados); else atualizarListaCatalogo(catalogoDados.filter(i => i.mercado === v)); });
     if(document.getElementById('btn-enviar-chat')) document.getElementById('btn-enviar-chat').addEventListener('click', enviarMensagemGemini);
     if(document.getElementById('btn-pesquisar')) document.getElementById('btn-pesquisar').addEventListener('click', pesquisarPrecos);
     if(document.getElementById('price-form')) document.getElementById('price-form').addEventListener('submit', salvarPreco);
     
     // Botão de foto
-    const btnFoto = document.getElementById('btn-camera-foto');
-    const inputFoto = document.getElementById('input-foto-produto');
-    const imgPreview = document.getElementById('preview-imagem');
-    const urlField = document.getElementById('image-url-field');
-    if(btnFoto && inputFoto) {
-        btnFoto.addEventListener('click', () => inputFoto.click());
-        inputFoto.addEventListener('change', async (e) => {
-            if(e.target.files && e.target.files[0]) {
-                const file = e.target.files[0]; btnFoto.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; 
-                try { const base64 = await comprimirImagem(file); imgPreview.src = base64; imgPreview.classList.remove('hidden'); btnFoto.classList.add('hidden'); urlField.value = base64; } catch(err) { mostrarNotificacao("Erro na foto", "erro"); btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>'; }
+    const btnFoto = document.getElementById('btn-camera-foto'); const inputFoto = document.getElementById('input-foto-produto'); const imgPreview = document.getElementById('preview-imagem'); const urlField = document.getElementById('image-url-field'); if(btnFoto && inputFoto) { btnFoto.addEventListener('click', () => inputFoto.click()); inputFoto.addEventListener('change', async (e) => { if(e.target.files && e.target.files[0]) { const file = e.target.files[0]; btnFoto.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; try { const base64 = await comprimirImagem(file); imgPreview.src = base64; imgPreview.classList.remove('hidden'); btnFoto.classList.add('hidden'); urlField.value = base64; } catch(err) { mostrarNotificacao("Erro na foto", "erro"); btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>'; } } }); }
+    (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
+
+    // --- "KILL SWITCH" DO SERVICE WORKER (Mantido para limpar o cache viciado) ---
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister().then(() => console.log("SW Removido para limpeza"));
             }
         });
     }
-
-    // Carrega mercados para o select
-    (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
 });
