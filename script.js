@@ -1,9 +1,9 @@
-// script.js - v15.0
+// script.js - v16.0 (Saudação Fixa + Voz Auto + Banco)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs1hlJIptANs_zPYIB4KWgsNmoXsPxp874bOti2jkSt0yCHh4Oj-fQuRMC57ygntNw/exec'; 
 
 // --- FIREBASE ---
 const firebaseConfig = {
-    apiKey: "AIzaSyBNhKquZr4_7lRDf-gXkj3j6o2jbvltKRA",
+    apiKey: "AIzaSyCwNVNTZiUJ9qeqniRK9GHDofB9HaQTJ_c",
     authDomain: "kalango-app.firebaseapp.com",
     projectId: "kalango-app",
     storageBucket: "kalango-app.firebasestorage.app",
@@ -44,7 +44,6 @@ auth.onAuthStateChanged((user) => {
         currentUser = user;
         document.getElementById('login-screen').classList.add('hidden');
         
-        // Configura UI do usuário
         if(document.getElementById('user-profile')) {
             document.getElementById('user-profile').classList.remove('hidden');
             document.getElementById('user-profile').classList.add('flex');
@@ -53,12 +52,11 @@ auth.onAuthStateChanged((user) => {
         }
         if(document.getElementById('username')) document.getElementById('username').value = user.displayName;
         
-        // Inicializações
         atualizarContadorCarrinho();
         if(typeof carregarCatalogo === 'function') carregarCatalogo();
         
-        // CORREÇÃO: Chama a saudação inicial
-        mensagemInicialChat();
+        // Verifica se precisa mandar a saudação agora
+        verificarSaudacaoChat();
         
     } else {
         currentUser = null;
@@ -67,17 +65,17 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-// --- CHAT & VOZ ---
-
-function mensagemInicialChat() {
+// --- FUNÇÃO DE SAUDAÇÃO (CORRIGIDA) ---
+function verificarSaudacaoChat() {
     const area = document.getElementById('chat-messages');
-    // Se estiver vazio, coloca a saudação
+    // Só adiciona se a área existir e estiver VAZIA
     if(area && area.innerHTML.trim() === "") {
-        const nome = currentUser ? currentUser.displayName.split(' ')[0] : "visitante";
+        const nome = currentUser ? currentUser.displayName.split(' ')[0] : "Visitante";
         area.innerHTML = `<div class="chat-ai text-sm mb-2">Opa, <b>${nome}</b>! 🦎<br>Sou o Kalango. Diga o que quer comprar que eu busco o melhor preço na nossa base.</div>`;
     }
 }
 
+// --- COMANDO DE VOZ (CORRIGIDO ENVIO AUTOMÁTICO) ---
 function iniciarGravacaoVoz() {
     if (!('webkitSpeechRecognition' in window)) {
         alert("Navegador sem suporte a voz.");
@@ -102,8 +100,10 @@ function iniciarGravacaoVoz() {
         const input = document.getElementById('chat-input');
         input.value = texto;
         
-        // CORREÇÃO: Envia automaticamente após reconhecer a fala
-        enviarMensagemGemini(); 
+        // ENVIO AUTOMÁTICO (DELAY DE 500ms PARA GARANTIR)
+        setTimeout(() => {
+            enviarMensagemGemini();
+        }, 500);
     };
     
     recognition.onerror = function(event) {
@@ -118,6 +118,7 @@ function iniciarGravacaoVoz() {
     recognition.start();
 }
 
+// --- CHAT ---
 async function enviarMensagemGemini() {
     const input = document.getElementById('chat-input');
     const txt = input.value.trim();
@@ -172,7 +173,6 @@ function renderizarMensagem(texto, remetente) {
 }
 
 // --- DEMAIS FUNÇÕES (CARRINHO, CÂMERA, ETC) ---
-// Mantidas iguais ao seu original para garantir funcionamento
 
 function gerarSeloUsuario(nome) {
     if (!nome) return `<span class="text-[9px] text-slate-500 italic">Anônimo</span>`;
@@ -192,7 +192,10 @@ async function trocarAba(aba) {
         else btn.classList.remove('hidden');
     }
     if (aba === 'catalogo') carregarCatalogo();
+    
+    // CORREÇÃO: Verifica a saudação ao abrir a aba chat
     if (aba === 'chat') { 
+        verificarSaudacaoChat();
         const ca = document.getElementById('chat-messages'); 
         setTimeout(() => ca.scrollTop = ca.scrollHeight, 100); 
     }
@@ -315,10 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnFoto = document.getElementById('btn-camera-foto'); const inputFoto = document.getElementById('input-foto-produto'); const imgPreview = document.getElementById('preview-imagem'); const urlField = document.getElementById('image-url-field');
     if(btnFoto && inputFoto) { btnFoto.addEventListener('click', () => inputFoto.click()); inputFoto.addEventListener('change', async (e) => { if(e.target.files && e.target.files[0]) { const file = e.target.files[0]; btnFoto.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; try { const base64 = await comprimirImagem(file); imgPreview.src = base64; imgPreview.classList.remove('hidden'); btnFoto.classList.add('hidden'); urlField.value = base64; } catch(err) { mostrarNotificacao("Erro na foto", "erro"); btnFoto.innerHTML = '<i class="fas fa-camera text-slate-400 text-2xl mb-1"></i><span class="text-[9px] text-slate-400 font-bold uppercase">Foto</span>'; } } }); }
     
-    // Carrega mercados
     (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
     
     if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(registrations) { for(let registration of registrations) { registration.unregister(); } }); }
 });
-
-
