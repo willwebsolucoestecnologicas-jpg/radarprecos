@@ -30,13 +30,25 @@ const USUARIOS_VERIFICADOS = ['Will', 'Admin', 'Kalango', 'WillWeb', 'Suporte'];
 // --- AUTENTICAÇÃO E LOGIN ---
 function fazerLoginGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).then((result) => {
-        mostrarNotificacao(`Bem-vindo, ${result.user.displayName.split(' ')[0]}!`);
-    }).catch((error) => {
-        console.error(error);
-        mostrarNotificacao("Erro no login. Tente novamente.", "erro");
-    });
+    // Mudamos de .signInWithPopup (que trava no celular) para .signInWithRedirect
+    auth.signInWithRedirect(provider);
 }
+
+// Verifica se voltou do login com erro
+auth.getRedirectResult()
+    .then((result) => {
+        if (result.user) {
+            mostrarNotificacao(`Bem-vindo, ${result.user.displayName.split(' ')[0]}!`);
+        }
+    })
+    .catch((error) => {
+        console.error(error);
+        if (error.code === 'auth/unauthorized-domain') {
+            mostrarNotificacao("Erro: Domínio não autorizado no Firebase", "erro");
+        } else {
+            mostrarNotificacao("Erro no login. Tente novamente.", "erro");
+        }
+    });
 
 // Monitora se o usuário entrou ou saiu
 auth.onAuthStateChanged((user) => {
@@ -454,3 +466,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // Carrega mercados para o select
     (async () => { try { const res = await fetch(`${APPS_SCRIPT_URL}?acao=buscarMercados`, { redirect: 'follow' }); const d = await res.json(); const s = document.getElementById('market'); if(d.mercados && s) { s.innerHTML = ''; d.mercados.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); } } catch(e) {} })();
 });
+
